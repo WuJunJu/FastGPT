@@ -38,3 +38,6 @@ files/helm/fastgpt/charts/*.tgz
 tmp/
 coverage
 document/.source
+
+# codex
+.codex
