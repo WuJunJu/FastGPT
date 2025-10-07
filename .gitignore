@@ -41,3 +41,6 @@ document/.source
 
 # codex
 .codex
+
+# run
+run/

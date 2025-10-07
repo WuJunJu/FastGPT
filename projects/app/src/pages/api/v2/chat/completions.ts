@@ -325,12 +325,15 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
       ? variables.cTime ?? formatTime2YMDHM()
       : getChatTitleFromChatMessage(userQuestion);
 
+    const assistantValueForSave =
+      (system_memories as any)?.__assistant_value_for_save || assistantResponses;
+    const { __assistant_value_for_save, ...restMemories } = (system_memories || {}) as any;
     const aiResponse: AIChatItemType & { dataId?: string } = {
       dataId: responseChatItemId,
       obj: ChatRoleEnum.AI,
-      value: assistantResponses,
+      value: assistantValueForSave,
       [DispatchNodeResponseKeyEnum.nodeResponse]: flowResponses,
-      memories: system_memories
+      memories: Object.keys(restMemories).length ? (restMemories as any) : undefined
     };
 
     const saveChatId = chatId || getNanoid(24);

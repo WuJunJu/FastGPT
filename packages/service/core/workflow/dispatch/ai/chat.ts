@@ -454,7 +454,7 @@ async function getChatMessages({
     }
   ];
 
-  const adaptMessages = chats2GPTMessages({ messages, reserveId: false });
+  const adaptMessages = chats2GPTMessages({ messages, reserveId: false, reserveTool: true });
 
   const filterMessages = await filterGPTMessageByMaxContext({
     messages: adaptMessages,

@@ -22,7 +22,7 @@ import { formatModelChars2Points } from '../../../../../support/wallet/usage/uti
 import { getHistoryPreview } from '@fastgpt/global/core/chat/utils';
 import { replaceVariable } from '@fastgpt/global/common/string/tools';
 import { getMultiplePrompt } from './constants';
-import { filterToolResponseToPreview } from './utils';
+import { filterToolResponseToPreview, filterToolResponseForContext } from './utils';
 import { getFileContentFromLinks, getHistoryFileLinks } from '../../tools/readFiles';
 import { parseUrlToFileType } from '@fastgpt/global/common/file/tools';
 import { FlowNodeTypeEnum } from '@fastgpt/global/core/workflow/node/constant';
@@ -188,8 +188,9 @@ export const dispatchRunTools = async (props: DispatchToolModuleProps): Promise<
     } = await (async () => {
       const adaptMessages = chats2GPTMessages({
         messages,
-        reserveId: false
-        // reserveTool: !!toolModel.toolChoice
+        reserveId: false,
+        // Reserve previous tool calls in context
+        reserveTool: true
       });
       const requestParams = {
         runtimeNodes,
@@ -221,6 +222,10 @@ export const dispatchRunTools = async (props: DispatchToolModuleProps): Promise<
     const totalPointsUsage = modelUsage + toolTotalPoints;
 
     const previewAssistantResponses = filterToolResponseToPreview(assistantResponses);
+    // Context version with larger limit (env configurable)
+    const contextAssistantResponses = filterToolResponseForContext
+      ? filterToolResponseForContext(assistantResponses)
+      : assistantResponses;
 
     return {
       data: {
@@ -231,6 +236,10 @@ export const dispatchRunTools = async (props: DispatchToolModuleProps): Promise<
       },
       [DispatchNodeResponseKeyEnum.runTimes]: runTimes,
       [DispatchNodeResponseKeyEnum.assistantResponses]: previewAssistantResponses,
+      [DispatchNodeResponseKeyEnum.memories]: {
+        ...(toolWorkflowInteractiveResponse?.system_memories || {}),
+        __assistant_value_for_save: contextAssistantResponses
+      },
       [DispatchNodeResponseKeyEnum.nodeResponse]: {
         // 展示的积分消耗
         totalPoints: totalPointsUsage,

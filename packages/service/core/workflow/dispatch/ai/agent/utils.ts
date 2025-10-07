@@ -18,13 +18,21 @@ export const updateToolInputValue = ({
   }));
 };
 
+const getIntEnv = (key: string, def: number) => {
+  const v = process.env[key];
+  if (!v) return def;
+  const n = Number(v);
+  return Number.isFinite(n) && n > 0 ? n : def;
+};
+
 export const filterToolResponseToPreview = (response: AIChatItemValueItemType[]) => {
+  const previewChars = getIntEnv('TOOL_RESPONSE_PREVIEW_CHARS', 500);
   return response.map((item) => {
     if (item.type === ChatItemValueTypeEnum.tool) {
       const formatTools = item.tools?.map((tool) => {
         return {
           ...tool,
-          response: sliceStrStartEnd(tool.response, 500, 500)
+          response: sliceStrStartEnd(tool.response, previewChars, previewChars)
         };
       });
       return {
@@ -33,6 +41,24 @@ export const filterToolResponseToPreview = (response: AIChatItemValueItemType[])
       };
     }
 
+    return item;
+  });
+};
+
+// Limit tool response length for context (DB storage / next-round context)
+export const filterToolResponseForContext = (response: AIChatItemValueItemType[]) => {
+  const contextChars = getIntEnv('TOOL_RESPONSE_CONTEXT_CHARS', 8000);
+  return response.map((item) => {
+    if (item.type === ChatItemValueTypeEnum.tool) {
+      const tools = item.tools?.map((tool) => ({
+        ...tool,
+        response: sliceStrStartEnd(tool.response, contextChars, contextChars)
+      }));
+      return {
+        ...item,
+        tools
+      };
+    }
     return item;
   });
 };
