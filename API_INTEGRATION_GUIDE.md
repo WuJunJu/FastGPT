@@ -25,6 +25,8 @@
 
 - ✅ 已有 FastGPT 服务地址（如 `https://your-fastgpt.com`）
 - ✅ 已获取 API Key（联系 FastGPT 管理员）
+  - **应用级 API Key**（推荐）：已绑定应用，不需要传 `appId`
+  - **账号级 API Key**：需要手动传 `appId` 参数
 - ✅ FastGPT 管理员已启用文件上传功能
 
 ### 核心流程
@@ -51,6 +53,50 @@
 ```http
 Authorization: Bearer YOUR_API_KEY
 ```
+
+### API Key 类型说明 ⚠️
+
+FastGPT 支持两种类型的 API Key：
+
+#### 1. 应用级 API Key（推荐） ✅
+
+**特点**：
+- 创建时已绑定到特定应用
+- API Key 本身包含 `appId` 信息
+- **上传文件时不需要传 `appId` 参数**
+
+**如何获取**：
+- FastGPT 管理员在应用设置 → API 访问中创建
+- 格式通常是：`fastgpt-xxx...`
+
+**使用方式**：
+```typescript
+// ✅ 不需要传 appId
+formData.append('bucketName', 'chat');
+formData.append('data', JSON.stringify({}));  // data 可以为空对象
+```
+
+#### 2. 账号级 API Key
+
+**特点**：
+- 与账号关联，不绑定特定应用
+- 可以操作账号下的所有应用
+- **上传文件时必须传 `appId` 参数**
+
+**使用方式**：
+```typescript
+// ⚠️ 必须传 appId
+formData.append('bucketName', 'chat');
+formData.append('data', JSON.stringify({ appId: 'your-app-id' }));
+```
+
+**如何获取 appId**：
+- 联系 FastGPT 管理员获取
+- 或从应用 URL 中获取（如 `/app/detail/64d8xxxx...`）
+
+---
+
+**本文档的代码示例将同时支持两种方式。**
 
 ---
 
@@ -92,7 +138,8 @@ Content-Disposition: form-data; name="data"
 |------|------|------|------|
 | `file` | File | ✅ | 文件对象 |
 | `bucketName` | String | ✅ | 固定值：`"chat"` |
-| `data` | JSON String | ✅ | `{"appId":"your-app-id"}` |
+| `data` | JSON String | ✅ | `{}` 或 `{"appId":"your-app-id"}` |
+| `data.appId` | String | ⚠️ | **仅账号级 API Key 需要** |
 
 ### 响应格式
 
@@ -115,11 +162,21 @@ Content-Disposition: form-data; name="data"
 #### JavaScript/TypeScript
 
 ```typescript
-async function uploadFile(file: File, apiKey: string, appId: string) {
+async function uploadFile(
+  file: File, 
+  apiKey: string, 
+  appId?: string  // ⚠️ 可选参数：应用级 API Key 不需要
+) {
   const formData = new FormData();
   formData.append('file', file);
   formData.append('bucketName', 'chat');
-  formData.append('data', JSON.stringify({ appId }));
+  
+  // 如果使用账号级 API Key，需要传 appId
+  if (appId) {
+    formData.append('data', JSON.stringify({ appId }));
+  } else {
+    formData.append('data', JSON.stringify({}));
+  }
 
   const response = await fetch('https://your-fastgpt.com/api/common/file/upload', {
     method: 'POST',
@@ -158,15 +215,21 @@ function extractFileIdFromUrl(url: string): string {
 import requests
 import json
 import base64
+from typing import Optional
 
-def upload_file(file_path: str, api_key: str, app_id: str) -> dict:
+def upload_file(
+    file_path: str, 
+    api_key: str, 
+    app_id: Optional[str] = None  # ⚠️ 可选参数
+) -> dict:
     url = "https://your-fastgpt.com/api/common/file/upload"
     
     with open(file_path, 'rb') as f:
         files = {'file': f}
+        # 如果使用账号级 API Key，需要传 appId
         data = {
             'bucketName': 'chat',
-            'data': json.dumps({'appId': app_id})
+            'data': json.dumps({'appId': app_id} if app_id else {})
         }
         headers = {'Authorization': f'Bearer {api_key}'}
         
@@ -450,7 +513,7 @@ import React, { useState } from 'react';
 // 配置
 const FASTGPT_API_URL = 'https://your-fastgpt.com';
 const FASTGPT_API_KEY = 'your-api-key';
-const APP_ID = 'your-app-id';
+const APP_ID = undefined;  // ⚠️ 应用级 API Key 不需要，账号级 API Key 必须填写
 
 // 类型定义
 interface FileInfo {
@@ -479,7 +542,7 @@ async function uploadFile(file: File): Promise<FileInfo> {
   const formData = new FormData();
   formData.append('file', file);
   formData.append('bucketName', 'chat');
-  formData.append('data', JSON.stringify({ appId: APP_ID }));
+  formData.append('data', JSON.stringify(APP_ID ? { appId: APP_ID } : {}));
 
   const response = await fetch(`${FASTGPT_API_URL}/api/common/file/upload`, {
     method: 'POST',
@@ -660,7 +723,8 @@ app.post('/api/upload', upload.single('file'), async (req, res) => {
     const formData = new FormData();
     formData.append('file', req.file.buffer, req.file.originalname);
     formData.append('bucketName', 'chat');
-    formData.append('data', JSON.stringify({ appId: req.body.appId }));
+    // 如果前端传了 appId，则使用；否则传空对象（适用于应用级 API Key）
+    formData.append('data', JSON.stringify(req.body.appId ? { appId: req.body.appId } : {}));
 
     const response = await axios.post(
       `${FASTGPT_API_URL}/api/common/file/upload`,
@@ -706,7 +770,51 @@ app.listen(3000);
 
 ## 常见问题
 
-### Q1: 文件过期后怎么办？
+### Q1: 如何判断我的 API Key 是应用级还是账号级？
+
+**A**: 有几种方法：
+
+#### 方法 1：询问 FastGPT 管理员
+最简单直接的方式，管理员在创建 API Key 时知道类型。
+
+#### 方法 2：测试上传（推荐）
+```typescript
+// 尝试不传 appId 上传
+const formData = new FormData();
+formData.append('file', file);
+formData.append('bucketName', 'chat');
+formData.append('data', JSON.stringify({}));
+
+const response = await fetch('/api/common/file/upload', {
+  method: 'POST',
+  headers: { 'Authorization': `Bearer ${apiKey}` },
+  body: formData
+});
+
+if (response.ok) {
+  console.log('✅ 应用级 API Key');
+} else {
+  const error = await response.json();
+  if (error.message?.includes('appId')) {
+    console.log('⚠️ 账号级 API Key，需要传 appId');
+  }
+}
+```
+
+#### 方法 3：查看 API Key 创建位置
+- **应用级**：在「应用设置 → API 访问」中创建，绑定到特定应用
+- **账号级**：在「账号设置 → API 密钥」中创建，可访问所有应用
+
+#### 推荐做法
+在您的代码中提供配置选项：
+```typescript
+const config = {
+  apiKey: 'your-api-key',
+  appId: 'your-app-id',  // 可选：账号级 API Key 需要填写
+};
+```
+
+### Q2: 文件过期后怎么办？
 
 **A**: 文件的过期策略由 FastGPT 管理员配置，作为 API 开发者：
 
@@ -726,7 +834,7 @@ if (checkIfFileExpired(file.uploadedAt, 7)) {
 }
 ```
 
-### Q2: 支持哪些文件类型？
+### Q3: 支持哪些文件类型？
 
 **A**: 取决于 FastGPT 管理员的配置，通常支持：
 
@@ -757,14 +865,14 @@ function validateFile(file: File) {
 }
 ```
 
-### Q3: 如何知道 AI 是否读取了文件？
+### Q4: 如何知道 AI 是否读取了文件？
 
 **A**: 从 API 响应中无法直接判断，但您可以：
 
 1. **查看响应内容**：如果 AI 的回复包含文件内容相关的信息，说明读取了
 2. **使用 `detail: true`**：某些 FastGPT 配置可能返回工具调用详情
 
-### Q4: 是否可以上传多个文件？
+### Q5: 是否可以上传多个文件？
 
 **A**: 可以！在 `content` 数组中添加多个 `file_url`：
 
@@ -779,14 +887,14 @@ content: [
 
 最大数量由 FastGPT 管理员配置（通常 5-20 个）。
 
-### Q5: 文件 URL 可以是外部链接吗？
+### Q6: 文件 URL 可以是外部链接吗？
 
 **A**: 可以，但建议上传到 FastGPT：
 
 - ✅ **上传到 FastGPT**：速度快，稳定，支持所有功能
 - ⚠️ **外部 URL**：需要公网可访问，可能被防火墙拦截
 
-### Q6: 如何实现文件预览/下载？
+### Q7: 如何实现文件预览/下载？
 
 **A**: 直接使用 `previewUrl`：
 
@@ -800,7 +908,7 @@ content: [
 window.open(file.previewUrl, '_blank');
 ```
 
-### Q7: API 调用失败如何处理？
+### Q8: API 调用失败如何处理？
 
 **A**: 常见错误码：
 
