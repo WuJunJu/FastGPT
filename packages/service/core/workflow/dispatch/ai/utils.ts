@@ -2,6 +2,15 @@ import type { UserChatItemValueItemType } from '@fastgpt/global/core/chat/type';
 import { ChatFileTypeEnum } from '@fastgpt/global/core/chat/constants';
 
 /**
+ * 开发模式调试日志（生产环境不输出）
+ */
+const devLog = (...args: any[]) => {
+  if (process.env.NODE_ENV === 'development') {
+    console.log(...args);
+  }
+};
+
+/**
  * 从文件URL中提取fileId
  * @param url 文件URL（包含JWT token）
  * @returns fileId（24位十六进制字符串）
@@ -10,7 +19,7 @@ export function extractFileIdFromUrl(url: string): string {
   try {
     const tokenMatch = url.match(/[?&]token=([^&]+)/);
     if (!tokenMatch) {
-      console.log('[extractFileIdFromUrl] No token found in URL:', url.substring(0, 100));
+      devLog('[extractFileIdFromUrl] No token found in URL:', url.substring(0, 100));
       return '';
     }
 
@@ -18,9 +27,10 @@ export function extractFileIdFromUrl(url: string): string {
     // 解码JWT payload（base64）
     const payload = JSON.parse(atob(token.split('.')[1]));
     const fileId = payload.fileId || '';
-    console.log('[extractFileIdFromUrl] Extracted fileId:', fileId, 'from token');
+    devLog('[extractFileIdFromUrl] Extracted fileId:', fileId, 'from token');
     return fileId;
   } catch (error) {
+    // 错误日志保留，生产环境也需要
     console.error('[extractFileIdFromUrl] Error extracting fileId:', error);
     return '';
   }

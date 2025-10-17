@@ -19,6 +19,15 @@ import { isInternalAddress } from '../../../../common/system/utils';
 import { extractFileIdFromUrl, isValidFileId, checkFileTokenExpired } from '../ai/utils';
 import { chatValue2RuntimePrompt } from '@fastgpt/global/core/chat/adapt';
 
+/**
+ * 开发模式调试日志（生产环境不输出）
+ */
+const devLog = (...args: any[]) => {
+  if (process.env.NODE_ENV === 'development') {
+    console.log(...args);
+  }
+};
+
 type Props = ModuleDispatchProps<{
   [NodeInputKeyEnum.fileUrlList]: string[];
 }>;
@@ -71,16 +80,11 @@ export const dispatchReadFiles = async (props: Props): Promise<Response> => {
     // 从当前query中提取文件（使用正确的解析方法）
     if (query) {
       const { files: currentFiles } = chatValue2RuntimePrompt(query);
-      console.log('[ReadFiles] Current query files count:', currentFiles?.length || 0);
+      devLog('[ReadFiles] Current query files count:', currentFiles?.length || 0);
       currentFiles?.forEach((file) => {
         if (file && file.url) {
           const fileId = extractFileIdFromUrl(file.url);
-          console.log(
-            '[ReadFiles] Extracted fileId from current query:',
-            fileId,
-            'name:',
-            file.name
-          );
+          devLog('[ReadFiles] Extracted fileId from current query:', fileId, 'name:', file.name);
           if (fileId) {
             fileIdMap.set(fileId, {
               url: file.url,
@@ -98,7 +102,7 @@ export const dispatchReadFiles = async (props: Props): Promise<Response> => {
           if (valueItem.type === 'file' && valueItem.file?.type === 'file') {
             const fileId = extractFileIdFromUrl(valueItem.file.url);
             if (fileId) {
-              console.log(
+              devLog(
                 '[ReadFiles] Extracted fileId from history:',
                 fileId,
                 'name:',
@@ -114,45 +118,45 @@ export const dispatchReadFiles = async (props: Props): Promise<Response> => {
       }
     });
 
-    console.log('[ReadFiles] Total fileIds in map:', fileIdMap.size);
-    console.log('[ReadFiles] All fileIds:', Array.from(fileIdMap.keys()));
+    devLog('[ReadFiles] Total fileIds in map:', fileIdMap.size);
+    devLog('[ReadFiles] All fileIds:', Array.from(fileIdMap.keys()));
 
     // === 解析fileUrlList，将fileId转换为URL ===
     const resolvedUrls: string[] = [];
     const fileErrors: string[] = [];
 
-    console.log('[ReadFiles] Received fileUrlList:', fileUrlList);
+    devLog('[ReadFiles] Received fileUrlList:', fileUrlList);
 
     for (const item of fileUrlList) {
       // 检查是否为fileId（24位十六进制）
       if (isValidFileId(item)) {
-        console.log('[ReadFiles] Valid fileId detected:', item);
+        devLog('[ReadFiles] Valid fileId detected:', item);
         const fileInfo = fileIdMap.get(item);
         if (fileInfo) {
-          console.log('[ReadFiles] Found file in map:', fileInfo.name);
+          devLog('[ReadFiles] Found file in map:', fileInfo.name);
           // 检查文件是否过期
           if (checkFileTokenExpired(fileInfo.url)) {
-            console.log('[ReadFiles] File is expired:', item);
+            devLog('[ReadFiles] File is expired:', item);
             fileErrors.push(
               `File expired: "${fileInfo.name}" (fileId: ${item}). Please re-upload the file.`
             );
           } else {
-            console.log('[ReadFiles] File is valid, adding to resolvedUrls');
+            devLog('[ReadFiles] File is valid, adding to resolvedUrls');
             resolvedUrls.push(fileInfo.url);
           }
         } else {
-          console.log('[ReadFiles] File NOT found in map for fileId:', item);
+          devLog('[ReadFiles] File NOT found in map for fileId:', item);
           fileErrors.push(`File not found: fileId "${item}". It may not be in this conversation.`);
         }
       } else {
-        console.log('[ReadFiles] Not a valid fileId, treating as URL:', item);
+        devLog('[ReadFiles] Not a valid fileId, treating as URL:', item);
         // 向后兼容：当作完整URL处理
         resolvedUrls.push(item);
       }
     }
 
-    console.log('[ReadFiles] Resolved URLs count:', resolvedUrls.length);
-    console.log('[ReadFiles] File errors count:', fileErrors.length);
+    devLog('[ReadFiles] Resolved URLs count:', resolvedUrls.length);
+    devLog('[ReadFiles] File errors count:', fileErrors.length);
 
     const { text, readFilesResult } = await getFileContentFromLinks({
       // Concat fileUrlList and filesFromHistories; remove not supported files
