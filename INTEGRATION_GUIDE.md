@@ -500,38 +500,95 @@ const aiResponse = {
 ```bash
 # .env 文件
 FILE_TOKEN_KEY=your_secret_key       # 文件 token 签名密钥
-CHAT_FILE_EXPIRE_TIME=7              # 文件过期时间（天）
+CHAT_FILE_EXPIRE_TIME=7              # 文件物理删除时间（天，设为 0 则永不删除）
 ```
+
+⚠️ **重要提示**：`CHAT_FILE_EXPIRE_TIME` 只控制文件物理删除，不影响 Token 访问。详见下方"文件过期处理"。
 
 ---
 
 ## 最佳实践
 
-### 1. 文件过期处理
+### 1. 文件过期处理（重要）⚠️
+
+FastGPT 有**两层过期机制**，它们是**独立**的：
+
+#### 1.1 文件物理删除（存储层）
+- **控制**: 环境变量 `CHAT_FILE_EXPIRE_TIME`
+- **默认**: 7 天后删除文件
+- **永不删除**: 设置为 `0`
+
+#### 1.2 Token 访问控制（安全层）
+- **控制**: 代码中的 `previewExpireMinutes`
+- **默认**: 7 天（10080 分钟）
+- **关键**: 即使文件存在，Token 过期后也无法访问
+
+**核心问题**：如果只设置 `CHAT_FILE_EXPIRE_TIME=0`（文件永不删除），Token 过期后 URL 仍然返回 `401 Unauthorized`！
+
+#### 解决方案 A：延长 Token 有效期（推荐）
+
+修改 `packages/global/common/file/constants.ts`：
 
 ```typescript
-// 建议：定期清理过期文件记录
+export const bucketNameMap = {
+  [BucketNameEnum.chat]: {
+    label: i18nT('file:bucket_chat'),
+    previewExpireMinutes: 365 * 24 * 60  // 改为 1 年（默认 7 天）
+    // 或更长: 10 * 365 * 24 * 60  // 10 年
+  }
+};
+```
+
+重新构建：
+```bash
+docker-compose build
+docker-compose restart
+```
+
+#### 解决方案 B：检测并提示用户
+
+```typescript
+// 检查 Token 是否即将过期
 async function checkFileExpiration(fileInfo: FileInfo) {
   const uploadedAt = new Date(fileInfo.uploadedAt);
-  const expirationDays = 7;  // FastGPT 默认 7 天
-  const expiresAt = new Date(uploadedAt.getTime() + expirationDays * 24 * 60 * 60 * 1000);
+  const tokenExpirationDays = 7;  // 根据您的 previewExpireMinutes 配置
+  const expiresAt = new Date(uploadedAt.getTime() + tokenExpirationDays * 24 * 60 * 60 * 1000);
   
-  if (new Date() > expiresAt) {
-    // 文件已过期
+  const remainingMs = expiresAt.getTime() - Date.now();
+  const remainingDays = Math.floor(remainingMs / (24 * 60 * 60 * 1000));
+  
+  if (remainingDays <= 0) {
     return {
       expired: true,
-      message: '文件已过期，请重新上传'
+      message: '文件 Token 已过期，请重新上传'
+    };
+  } else if (remainingDays <= 1) {
+    return {
+      expired: false,
+      warning: true,
+      message: `文件即将过期（还剩 ${remainingDays} 天）`
     };
   }
   
-  return { expired: false };
+  return { expired: false, warning: false };
 }
 
 // 在 UI 中显示提示
-if (checkFileExpiration(file).expired) {
-  showWarning('该文件已过期，AI 可能无法读取。建议重新上传。');
+const status = checkFileExpiration(file);
+if (status.expired) {
+  showError('该文件已过期，AI 无法读取。请重新上传。');
+} else if (status.warning) {
+  showWarning(status.message);
 }
 ```
+
+#### 详细配置指南
+
+请参考项目根目录的 `FILE_EXPIRATION_CONFIG.md` 文档，了解：
+- 完整的过期机制说明
+- Token 刷新实现方案
+- 不同场景的推荐配置
+- 故障排查指南
 
 ### 2. Token 优化策略
 
