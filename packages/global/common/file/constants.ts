@@ -12,7 +12,7 @@ export const bucketNameMap = {
   },
   [BucketNameEnum.chat]: {
     label: i18nT('file:bucket_chat'),
-    previewExpireMinutes: 365 * 24 * 60 // 365 days (1 year) - 适合长期存储场景
+    previewExpireMinutes: 3650 * 24 * 60 // 365 days (1 year) - 适合长期存储场景
   }
 };
 
