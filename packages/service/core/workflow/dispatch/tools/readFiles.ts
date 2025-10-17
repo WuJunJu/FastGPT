@@ -16,6 +16,8 @@ import { addRawTextBuffer, getRawTextBuffer } from '../../../../common/buffer/ra
 import { addMinutes } from 'date-fns';
 import { getNodeErrResponse } from '../utils';
 import { isInternalAddress } from '../../../../common/system/utils';
+import { extractFileIdFromUrl, isValidFileId, checkFileTokenExpired } from '../ai/utils';
+import { chatValue2RuntimePrompt } from '@fastgpt/global/core/chat/adapt';
 
 type Props = ModuleDispatchProps<{
   [NodeInputKeyEnum.fileUrlList]: string[];
@@ -51,6 +53,7 @@ export const dispatchReadFiles = async (props: Props): Promise<Response> => {
     runningUserInfo: { teamId, tmbId },
     histories,
     chatConfig,
+    query,
     node: { version },
     params: { fileUrlList = [] },
     usageId
@@ -62,9 +65,98 @@ export const dispatchReadFiles = async (props: Props): Promise<Response> => {
   const filesFromHistories = version !== '489' ? [] : getHistoryFileLinks(histories);
 
   try {
+    // === 构建fileId映射表 ===
+    const fileIdMap = new Map<string, { url: string; name: string }>();
+
+    // 从当前query中提取文件（使用正确的解析方法）
+    if (query) {
+      const { files: currentFiles } = chatValue2RuntimePrompt(query);
+      console.log('[ReadFiles] Current query files count:', currentFiles?.length || 0);
+      currentFiles?.forEach((file) => {
+        if (file && file.url) {
+          const fileId = extractFileIdFromUrl(file.url);
+          console.log(
+            '[ReadFiles] Extracted fileId from current query:',
+            fileId,
+            'name:',
+            file.name
+          );
+          if (fileId) {
+            fileIdMap.set(fileId, {
+              url: file.url,
+              name: file.name || 'Unnamed'
+            });
+          }
+        }
+      });
+    }
+
+    // 从历史记录中提取文件
+    histories.forEach((item) => {
+      if (item.obj === ChatRoleEnum.Human && item.value) {
+        item.value.forEach((valueItem) => {
+          if (valueItem.type === 'file' && valueItem.file?.type === 'file') {
+            const fileId = extractFileIdFromUrl(valueItem.file.url);
+            if (fileId) {
+              console.log(
+                '[ReadFiles] Extracted fileId from history:',
+                fileId,
+                'name:',
+                valueItem.file.name
+              );
+              fileIdMap.set(fileId, {
+                url: valueItem.file.url,
+                name: valueItem.file.name || 'Unnamed'
+              });
+            }
+          }
+        });
+      }
+    });
+
+    console.log('[ReadFiles] Total fileIds in map:', fileIdMap.size);
+    console.log('[ReadFiles] All fileIds:', Array.from(fileIdMap.keys()));
+
+    // === 解析fileUrlList，将fileId转换为URL ===
+    const resolvedUrls: string[] = [];
+    const fileErrors: string[] = [];
+
+    console.log('[ReadFiles] Received fileUrlList:', fileUrlList);
+
+    for (const item of fileUrlList) {
+      // 检查是否为fileId（24位十六进制）
+      if (isValidFileId(item)) {
+        console.log('[ReadFiles] Valid fileId detected:', item);
+        const fileInfo = fileIdMap.get(item);
+        if (fileInfo) {
+          console.log('[ReadFiles] Found file in map:', fileInfo.name);
+          // 检查文件是否过期
+          if (checkFileTokenExpired(fileInfo.url)) {
+            console.log('[ReadFiles] File is expired:', item);
+            fileErrors.push(
+              `File expired: "${fileInfo.name}" (fileId: ${item}). Please re-upload the file.`
+            );
+          } else {
+            console.log('[ReadFiles] File is valid, adding to resolvedUrls');
+            resolvedUrls.push(fileInfo.url);
+          }
+        } else {
+          console.log('[ReadFiles] File NOT found in map for fileId:', item);
+          fileErrors.push(`File not found: fileId "${item}". It may not be in this conversation.`);
+        }
+      } else {
+        console.log('[ReadFiles] Not a valid fileId, treating as URL:', item);
+        // 向后兼容：当作完整URL处理
+        resolvedUrls.push(item);
+      }
+    }
+
+    console.log('[ReadFiles] Resolved URLs count:', resolvedUrls.length);
+    console.log('[ReadFiles] File errors count:', fileErrors.length);
+
     const { text, readFilesResult } = await getFileContentFromLinks({
       // Concat fileUrlList and filesFromHistories; remove not supported files
-      urls: [...fileUrlList, ...filesFromHistories],
+      urls: [...resolvedUrls, ...filesFromHistories],
       requestOrigin,
       maxFiles,
       teamId,
@@ -73,9 +165,15 @@ export const dispatchReadFiles = async (props: Props): Promise<Response> => {
       usageId
     });
 
+    // 如果有文件错误，附加到输出文本
+    const errorText =
+      fileErrors.length > 0
+        ? `\n\n--- File Access Errors ---\n${fileErrors.join('\n')}\n--- End of Errors ---`
+        : '';
+
     return {
       data: {
-        [NodeOutputKeyEnum.text]: text
+        [NodeOutputKeyEnum.text]: text + errorText
       },
       [DispatchNodeResponseKeyEnum.nodeResponse]: {
         readFiles: readFilesResult.map((item) => ({
@@ -87,7 +185,7 @@ export const dispatchReadFiles = async (props: Props): Promise<Response> => {
           .join('\n******\n')
       },
       [DispatchNodeResponseKeyEnum.toolResponses]: {
-        fileContent: text
+        fileContent: text + errorText
       }
     };
   } catch (error) {

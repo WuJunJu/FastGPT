@@ -50,7 +50,9 @@ export const defaultChatInputGuideConfig = {
 export const defaultAppSelectFileConfig: AppFileSelectConfigType = {
   canSelectFile: false,
   canSelectImg: false,
-  maxFiles: 10
+  maxFiles: 10,
+  autoInjectFileContent: true, // 默认自动注入（向后兼容）
+  inlineFileMetadata: false // 默认传统模式（向后兼容）
 };
 
 export enum AppTemplateTypeEnum {

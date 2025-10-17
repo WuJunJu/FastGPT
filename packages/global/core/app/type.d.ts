@@ -234,6 +234,8 @@ export type AppFileSelectConfigType = {
   customPdfParse?: boolean;
   canSelectImg: boolean;
   maxFiles: number;
+  autoInjectFileContent?: boolean; // 是否自动注入文件内容到上下文（默认true）
+  inlineFileMetadata?: boolean; // 是否内联显示文件元数据（默认false）
 };
 
 export type SystemPluginListItemType = {

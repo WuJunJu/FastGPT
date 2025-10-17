@@ -24,14 +24,16 @@ export const ReadFilesNode: FlowNodeTemplateType = {
   intro: i18nT('app:workflow.read_files_tip'),
   showStatus: true,
   version: '4.9.2',
-  isTool: false,
+  isTool: true,
   courseUrl: '/docs/introduction/guide/course/fileinput/',
   inputs: [
     {
       key: NodeInputKeyEnum.fileUrlList,
       renderTypeList: [FlowNodeInputTypeEnum.reference],
       valueType: WorkflowIOValueTypeEnum.arrayString,
-      label: i18nT('app:workflow.file_url'),
+      label: i18nT('app:workflow.file_id_or_url'),
+      toolDescription:
+        'List of fileIds or URLs to read. Use fileId (24-character hex string) for files uploaded in this conversation, or full URL for external files. Example: ["6753f63fd6e15a77765ca448", "6753f640d6e15a77765ca449"]',
       required: true,
       value: []
     }

@@ -132,6 +132,7 @@ export const dispatchChatCompletion = async (props: ChatProps): Promise<ChatResp
         requestOrigin,
         maxFiles: chatConfig?.fileSelectConfig?.maxFiles || 20,
         customPdfParse: chatConfig?.fileSelectConfig?.customPdfParse,
+        autoInjectFileContent: chatConfig?.fileSelectConfig?.autoInjectFileContent ?? true,
         usageId,
         runningUserInfo
       })
@@ -315,6 +316,7 @@ async function getMultiInput({
   requestOrigin,
   maxFiles,
   customPdfParse,
+  autoInjectFileContent,
   usageId,
   runningUserInfo
 }: {
@@ -325,6 +327,7 @@ async function getMultiInput({
   requestOrigin?: string;
   maxFiles: number;
   customPdfParse?: boolean;
+  autoInjectFileContent: boolean;
   usageId?: string;
   runningUserInfo: ChatDispatchProps['runningUserInfo'];
 }) {
@@ -355,6 +358,14 @@ async function getMultiInput({
     return {
       documentQuoteText: '',
       userFiles: []
+    };
+  }
+
+  // 如果不自动注入内容，直接返回
+  if (!autoInjectFileContent) {
+    return {
+      documentQuoteText: '',
+      userFiles: fileLinks.map((url) => parseUrlToFileType(url)).filter(Boolean)
     };
   }
 

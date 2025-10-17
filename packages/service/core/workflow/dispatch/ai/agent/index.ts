@@ -24,6 +24,7 @@ import { replaceVariable } from '@fastgpt/global/common/string/tools';
 import { getMultiplePrompt } from './constants';
 import { filterToolResponseToPreview, filterToolResponseForContext } from './utils';
 import { getFileContentFromLinks, getHistoryFileLinks } from '../../tools/readFiles';
+import { formatInlineFileMetadata, formatTraditionalFileList } from '../utils';
 import { parseUrlToFileType } from '@fastgpt/global/common/file/tools';
 import { FlowNodeTypeEnum } from '@fastgpt/global/core/workflow/node/constant';
 import { getDocumentQuotePrompt } from '@fastgpt/global/core/ai/prompt/AIChat';
@@ -105,9 +106,10 @@ export const dispatchRunTools = async (props: DispatchToolModuleProps): Promise<
 
     // Check interactive entry
     props.node.isEntry = false;
-    const hasReadFilesTool = toolNodes.some(
-      (item) => item.flowNodeType === FlowNodeTypeEnum.readFiles
-    );
+
+    // 获取配置项
+    const autoInjectFileContent = chatConfig?.fileSelectConfig?.autoInjectFileContent ?? true;
+    const inlineFileMetadata = chatConfig?.fileSelectConfig?.inlineFileMetadata ?? false;
 
     const globalFiles = chatValue2RuntimePrompt(query).files;
     const { documentQuoteText, userFiles } = await getMultiInput({
@@ -118,7 +120,7 @@ export const dispatchRunTools = async (props: DispatchToolModuleProps): Promise<
       customPdfParse: chatConfig?.fileSelectConfig?.customPdfParse,
       fileLinks,
       inputFiles: globalFiles,
-      hasReadFilesTool,
+      autoInjectFileContent,
       usageId
     });
 
@@ -144,7 +146,8 @@ export const dispatchRunTools = async (props: DispatchToolModuleProps): Promise<
               ...item,
               value: toolCallMessagesAdapt({
                 userInput: item.value,
-                skip: !hasReadFilesTool
+                skip: autoInjectFileContent, // 自动注入时跳过文件元数据提示
+                inlineMode: inlineFileMetadata
               })
             };
           }
@@ -153,7 +156,8 @@ export const dispatchRunTools = async (props: DispatchToolModuleProps): Promise<
         {
           obj: ChatRoleEnum.Human,
           value: toolCallMessagesAdapt({
-            skip: !hasReadFilesTool,
+            skip: autoInjectFileContent, // 自动注入时跳过文件元数据提示
+            inlineMode: inlineFileMetadata,
             userInput: runtimePrompt2ChatsValue({
               text: userChatInput,
               files: userFiles
@@ -291,7 +295,7 @@ const getMultiInput = async ({
   maxFiles,
   customPdfParse,
   inputFiles,
-  hasReadFilesTool,
+  autoInjectFileContent,
   usageId
 }: {
   runningUserInfo: ChatDispatchProps['runningUserInfo'];
@@ -301,11 +305,11 @@ const getMultiInput = async ({
   maxFiles: number;
   customPdfParse?: boolean;
   inputFiles: UserChatItemValueItemType['file'][];
-  hasReadFilesTool: boolean;
+  autoInjectFileContent: boolean;
   usageId?: string;
 }) => {
-  // Not file quote
-  if (!fileLinks || hasReadFilesTool) {
+  // Not file quote or auto inject is disabled
+  if (!fileLinks || !autoInjectFileContent) {
     return {
       documentQuoteText: '',
       userFiles: inputFiles
@@ -346,44 +350,90 @@ Guide the LLM to call tool.
 */
 const toolCallMessagesAdapt = ({
   userInput,
-  skip
+  skip,
+  inlineMode = false
 }: {
   userInput: UserChatItemValueItemType[];
   skip?: boolean;
+  inlineMode?: boolean;
 }): UserChatItemValueItemType[] => {
   if (skip) return userInput;
 
   const files = userInput.filter((item) => item.type === 'file');
 
   if (files.length > 0) {
-    const filesCount = files.filter((file) => file.file?.type === 'file').length;
-    const imgCount = files.filter((file) => file.file?.type === 'image').length;
+    const documentFiles = files.filter((file) => file.file?.type === 'file');
+    const imageFiles = files.filter((file) => file.file?.type === 'image');
 
-    if (userInput.some((item) => item.type === 'text')) {
-      return userInput.map((item) => {
-        if (item.type === 'text') {
-          const text = item.text?.content || '';
+    const filesCount = documentFiles.length;
+    const imgCount = imageFiles.length;
 
-          return {
-            ...item,
-            text: {
-              content: getMultiplePrompt({ fileCount: filesCount, imgCount, question: text })
+    // 内联模式：文件元数据紧贴在消息内容前
+    if (inlineMode) {
+      const fileMetadataBlock = formatInlineFileMetadata(documentFiles, imageFiles);
+
+      // 查找文本内容
+      const textItem = userInput.find((item) => item.type === 'text');
+      const textContent = textItem?.text?.content || '';
+
+      if (textContent) {
+        // 有文本：在文本前插入文件元数据
+        return userInput
+          .map((item) => {
+            if (item.type === 'text') {
+              return {
+                ...item,
+                text: {
+                  content: `${fileMetadataBlock}\n${textContent}`
+                }
+              };
             }
-          };
-        }
-        return item;
-      });
-    }
-
-    // Every input is a file
-    return [
-      {
-        type: ChatItemValueTypeEnum.text,
-        text: {
-          content: getMultiplePrompt({ fileCount: filesCount, imgCount, question: '' })
-        }
+            // 移除file类型的item（元数据已内联到文本中）
+            return null;
+          })
+          .filter(Boolean) as UserChatItemValueItemType[];
+      } else {
+        // 无文本：只有文件，创建纯文件元数据消息
+        return [
+          {
+            type: ChatItemValueTypeEnum.text,
+            text: {
+              content: fileMetadataBlock
+            }
+          }
+        ];
       }
-    ];
+    } else {
+      // 传统模式：统一列在消息末尾
+      const fileListInfo = formatTraditionalFileList(documentFiles);
+
+      if (userInput.some((item) => item.type === 'text')) {
+        return userInput.map((item) => {
+          if (item.type === 'text') {
+            const text = item.text?.content || '';
+            return {
+              ...item,
+              text: {
+                content:
+                  getMultiplePrompt({ fileCount: filesCount, imgCount, question: text }) +
+                  fileListInfo
+              }
+            };
+          }
+          return item;
+        });
+      }
+
+      return [
+        {
+          type: ChatItemValueTypeEnum.text,
+          text: {
+            content:
+              getMultiplePrompt({ fileCount: filesCount, imgCount, question: '' }) + fileListInfo
+          }
+        }
+      ];
+    }
   }
 
   return userInput;

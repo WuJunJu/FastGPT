@@ -185,6 +185,44 @@ const FileSelect = ({
               />
             </Box>
           </Box>
+
+          {/* 新增：自动注入文件内容开关 */}
+          <Box mt={6}>
+            <HStack>
+              <FormLabel flex={'1 0 0'}>{t('app:auto_inject_file_content')}</FormLabel>
+              <Switch
+                isChecked={value.autoInjectFileContent ?? true}
+                onChange={(e) => {
+                  onChange({
+                    ...value,
+                    autoInjectFileContent: e.target.checked
+                  });
+                }}
+              />
+            </HStack>
+            <Box mt={2} fontSize={'xs'} color={'myGray.500'}>
+              {t('app:auto_inject_file_content_tip')}
+            </Box>
+          </Box>
+
+          {/* 新增：内联文件元数据开关 */}
+          <Box mt={6}>
+            <HStack>
+              <FormLabel flex={'1 0 0'}>{t('app:inline_file_metadata')}</FormLabel>
+              <Switch
+                isChecked={value.inlineFileMetadata ?? false}
+                onChange={(e) => {
+                  onChange({
+                    ...value,
+                    inlineFileMetadata: e.target.checked
+                  });
+                }}
+              />
+            </HStack>
+            <Box mt={2} fontSize={'xs'} color={'myGray.500'}>
+              {t('app:inline_file_metadata_tip')}
+            </Box>
+          </Box>
         </ModalBody>
         <ModalFooter>
           <Button onClick={onClose} px={8}>
