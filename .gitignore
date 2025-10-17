@@ -44,3 +44,6 @@ document/.source
 
 # run
 run/
+
+# examples
+scripts/examples/

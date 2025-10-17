@@ -226,6 +226,13 @@ export const dispatchRunTools = async (props: DispatchToolModuleProps): Promise<
     const contextAssistantResponses = filterToolResponseForContext
       ? filterToolResponseForContext(assistantResponses)
       : assistantResponses;
+    const toolFlowMemories = dispatchFlowResponse.reduce<Record<string, any>>((acc, item) => {
+      const memories = item[DispatchNodeResponseKeyEnum.memories];
+      if (memories) {
+        Object.assign(acc, memories);
+      }
+      return acc;
+    }, {});
 
     return {
       data: {
@@ -237,7 +244,7 @@ export const dispatchRunTools = async (props: DispatchToolModuleProps): Promise<
       [DispatchNodeResponseKeyEnum.runTimes]: runTimes,
       [DispatchNodeResponseKeyEnum.assistantResponses]: previewAssistantResponses,
       [DispatchNodeResponseKeyEnum.memories]: {
-        ...(toolWorkflowInteractiveResponse?.system_memories || {}),
+        ...toolFlowMemories,
         __assistant_value_for_save: contextAssistantResponses
       },
       [DispatchNodeResponseKeyEnum.nodeResponse]: {
