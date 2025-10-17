@@ -29,6 +29,7 @@ from pathlib import Path
 
 DEFAULT_API_URL = "http://192.168.2.46:3000"
 DEFAULT_API_KEY = "fastgpt-rASRhNvn9TGrbMuR3nZs3GmmDO0J92G9x4UA2YC3EqvbfC8Iyt4Eyk"
+APP_ID = "68f26a20986bbb4afa2d5444"  # ✅ 应用 ID
 
 # 测试文件配置（如果文件不存在，会自动创建）
 TEST_FILES = {
@@ -91,12 +92,21 @@ class FastGPTClient:
             response.raise_for_status()
             
             result = response.json()
-            file_id = self._extract_file_id(result['previewUrl'])
+            
+            # 处理嵌套的 data 字段
+            data = result.get('data', result)
+            preview_url = data['previewUrl']
+            
+            # 如果是相对路径，转换为完整 URL
+            if preview_url.startswith('/'):
+                preview_url = f"{self.base_url}{preview_url}"
+            
+            file_id = self._extract_file_id(preview_url)
             
             return {
                 'fileId': file_id,
                 'fileName': os.path.basename(file_path),
-                'previewUrl': result['previewUrl']
+                'previewUrl': preview_url
             }
     
     def chat(
@@ -161,8 +171,9 @@ class FastGPTClient:
 class TestRunner:
     """测试运行器"""
     
-    def __init__(self, client: FastGPTClient):
+    def __init__(self, client: FastGPTClient, app_id: Optional[str] = None):
         self.client = client
+        self.app_id = app_id
         self.test_results = []
         self.uploaded_files = {}
     
@@ -262,7 +273,7 @@ class TestRunner:
         """测试 2: 文件上传"""
         file_path = "test.txt"
         
-        result = self.client.upload_file(file_path)
+        result = self.client.upload_file(file_path, self.app_id)
         
         # 保存上传结果供后续测试使用
         self.uploaded_files['test.txt'] = result
@@ -281,7 +292,7 @@ class TestRunner:
         """测试 3: 单文件对话"""
         # 确保文件已上传
         if 'test.txt' not in self.uploaded_files:
-            self.uploaded_files['test.txt'] = self.client.upload_file('test.txt')
+            self.uploaded_files['test.txt'] = self.client.upload_file('test.txt', self.app_id)
         
         file_info = self.uploaded_files['test.txt']
         
@@ -311,7 +322,7 @@ class TestRunner:
         """测试 4: 多文件上传"""
         for filename in TEST_FILES.keys():
             if filename not in self.uploaded_files:
-                result = self.client.upload_file(filename)
+                result = self.client.upload_file(filename, self.app_id)
                 self.uploaded_files[filename] = result
                 print(f"  ✓ {filename} -> fileId: {result['fileId']}")
         
@@ -345,7 +356,7 @@ class TestRunner:
         """测试 6: 多轮对话（带文件历史）"""
         # 确保文件已上传
         if 'test.txt' not in self.uploaded_files:
-            self.uploaded_files['test.txt'] = self.client.upload_file('test.txt')
+            self.uploaded_files['test.txt'] = self.client.upload_file('test.txt', self.app_id)
         
         file_info = self.uploaded_files['test.txt']
         
@@ -391,7 +402,7 @@ class TestRunner:
         """测试 7: fileId 引用测试（验证 AI 是否使用 fileId 而非完整 URL）"""
         # 确保文件已上传
         if 'test.txt' not in self.uploaded_files:
-            self.uploaded_files['test.txt'] = self.client.upload_file('test.txt')
+            self.uploaded_files['test.txt'] = self.client.upload_file('test.txt', self.app_id)
         
         file_info = self.uploaded_files['test.txt']
         
@@ -481,7 +492,7 @@ def main():
         )
         
         # 创建测试运行器
-        runner = TestRunner(client)
+        runner = TestRunner(client, app_id=APP_ID)
         
         # 运行所有测试
         runner.run_all_tests()

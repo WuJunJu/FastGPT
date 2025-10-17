@@ -23,7 +23,7 @@ import os
 
 DEFAULT_API_URL = "http://192.168.2.46:3000"
 DEFAULT_API_KEY = "fastgpt-rASRhNvn9TGrbMuR3nZs3GmmDO0J92G9x4UA2YC3EqvbfC8Iyt4Eyk"
-APP_ID = ""  # ⚠️ 必填：请填写您的 appId
+APP_ID = "68f26a20986bbb4afa2d5444"  # ✅ 已配置
 
 # ============================================================================
 
@@ -92,8 +92,13 @@ def test_file_upload_with_appid():
                 print(f"\n响应内容:")
                 print(json.dumps(result, indent=2, ensure_ascii=False))
                 
-                # 提取 fileId
-                url = result['previewUrl']
+                # 提取数据（处理嵌套的 data 字段）
+                data = result.get('data', result)
+                url = data['previewUrl']
+                
+                # 如果是相对路径，转换为完整 URL
+                if url.startswith('/'):
+                    url = f"{DEFAULT_API_URL}{url}"
                 token_match = url.split('?token=')[1] if '?token=' in url else ''
                 if token_match:
                     try:
@@ -116,7 +121,7 @@ def test_file_upload_with_appid():
                             {
                                 "type": "file_url",
                                 "name": test_file,
-                                "url": result['previewUrl']
+                                "url": url  # 使用完整的 URL
                             }
                         ]
                     }
