@@ -129,39 +129,39 @@ export const useChatTest = ({
 
   // 新增变量时候，自动加入默认值
   useEffect(() => {
-    const values = variablesForm.getValues();
-    if (values.variables && variableList) {
+    if (variableList) {
       variableList.forEach((item) => {
         const val = variablesForm.getValues(`variables.${item.key}`);
         if (item.defaultValue !== undefined && (val === undefined || val === null || val === '')) {
-          values.variables[item.key] = item.defaultValue;
+          variablesForm.setValue(`variables.${item.key}`, item.defaultValue);
         }
       });
-
-      variablesForm.reset(values);
     }
-  }, [variableList, variablesForm]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [variableList]);
 
-  const CustomChatContainer = useMemoizedFn(() =>
-    appDetail.type === AppTypeEnum.plugin ? (
-      <Box p={5} pb={16}>
-        <PluginRunBox
+  const CustomChatContainer = useCallback(
+    () =>
+      appDetail.type === AppTypeEnum.workflowTool ? (
+        <Box p={5} pb={16}>
+          <PluginRunBox
+            appId={appId}
+            chatId={chatId}
+            onNewChat={restartChat}
+            onStartChat={startChat}
+          />
+        </Box>
+      ) : (
+        <ChatBox
+          isReady={isReady}
           appId={appId}
           chatId={chatId}
-          onNewChat={restartChat}
+          showMarkIcon
+          chatType={ChatTypeEnum.test}
           onStartChat={startChat}
         />
-      </Box>
-    ) : (
-      <ChatBox
-        isReady={isReady}
-        appId={appId}
-        chatId={chatId}
-        showMarkIcon
-        chatType={ChatTypeEnum.test}
-        onStartChat={startChat}
-      />
-    )
+      ),
+    [appDetail.type, appId, chatId, isReady, restartChat, startChat]
   );
 
   return {

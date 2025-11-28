@@ -15,7 +15,7 @@ import { SseResponseEventEnum } from '@fastgpt/global/core/workflow/runtime/cons
 import { useTranslation } from 'next-i18next';
 import { type ChatBoxInputFormType } from '../ChatBox/type';
 import { chats2GPTMessages } from '@fastgpt/global/core/chat/adapt';
-import { getPluginRunUserQuery } from '@fastgpt/global/core/workflow/utils';
+import { clientGetWorkflowToolRunUserQuery } from '@fastgpt/global/core/workflow/utils';
 import { cloneDeep } from 'lodash';
 import { ChatItemContext } from '@/web/core/chat/context/chatItemContext';
 import { ChatRecordContext } from '@/web/core/chat/context/chatRecordContext';
@@ -23,6 +23,7 @@ import { type AppFileSelectConfigType } from '@fastgpt/global/core/app/type';
 import { defaultAppSelectFileConfig } from '@fastgpt/global/core/app/constants';
 import { mergeChatResponseData } from '@fastgpt/global/core/chat/utils';
 import { getErrText } from '@fastgpt/global/common/error/utils';
+import { WorkflowRuntimeContextProvider } from '@/components/core/chat/ChatContainer/context/workflowRuntimeContext';
 
 type PluginRunContextType = PluginRunBoxProps & {
   isChatting: boolean;
@@ -31,16 +32,15 @@ type PluginRunContextType = PluginRunBoxProps & {
   fileSelectConfig: AppFileSelectConfigType;
 };
 
-export const PluginRunContext = createContext<PluginRunContextType>({
+export const PluginRunContext = createContext<
+  Omit<PluginRunContextType, 'appId' | 'chatId' | 'outLinkAuthData'>
+>({
   isChatting: false,
   onSubmit: function (e: FieldValues): Promise<any> {
     throw new Error('Function not implemented.');
   },
   instruction: '',
-  fileSelectConfig: defaultAppSelectFileConfig,
-  appId: '',
-  chatId: '',
-  outLinkAuthData: {}
+  fileSelectConfig: defaultAppSelectFileConfig
 });
 
 const PluginRunContextProvider = ({
@@ -193,7 +193,7 @@ const PluginRunContextProvider = ({
 
       setChatRecords([
         {
-          ...getPluginRunUserQuery({
+          ...clientGetWorkflowToolRunUserQuery({
             pluginInputs,
             variables,
             files: files as RuntimeUserPromptType['files']
@@ -229,25 +229,13 @@ const PluginRunContextProvider = ({
       });
 
       try {
-        // Remove files icon
-        const formatVariables = cloneDeep(variables);
-        for (const key in formatVariables) {
-          if (Array.isArray(formatVariables[key])) {
-            formatVariables[key].forEach((item) => {
-              if (item.url && item.icon) {
-                delete item.icon;
-              }
-            });
-          }
-        }
-
         await onStartChat({
           messages,
           controller: chatController.current,
           generatingMessage,
           variables: {
             files,
-            ...formatVariables
+            ...variables
           }
         });
 
@@ -304,7 +292,15 @@ const PluginRunContextProvider = ({
     instruction,
     fileSelectConfig
   };
-  return <PluginRunContext.Provider value={contextValue}>{children}</PluginRunContext.Provider>;
+  return (
+    <WorkflowRuntimeContextProvider
+      appId={props.appId}
+      chatId={props.chatId}
+      outLinkAuthData={props.outLinkAuthData || {}}
+    >
+      <PluginRunContext.Provider value={contextValue}>{children}</PluginRunContext.Provider>
+    </WorkflowRuntimeContextProvider>
+  );
 };
 
 export default PluginRunContextProvider;

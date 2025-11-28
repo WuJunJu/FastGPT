@@ -13,11 +13,9 @@ export enum FlowNodeInputTypeEnum { // render ui
   JSONEditor = 'JSONEditor',
 
   addInputParam = 'addInputParam', // params input
+  customVariable = 'customVariable', // 外部变量
 
-  // special input
   selectApp = 'selectApp',
-  customVariable = 'customVariable',
-
   // ai model select
   selectLLMModel = 'selectLLMModel',
   settingLLMModel = 'settingLLMModel',
@@ -28,7 +26,7 @@ export enum FlowNodeInputTypeEnum { // render ui
   settingDatasetQuotePrompt = 'settingDatasetQuotePrompt',
 
   hidden = 'hidden',
-  custom = 'custom',
+  custom = 'custom', // 自定义渲染
 
   fileSelect = 'fileSelect',
   timePointSelect = 'timePointSelect',
@@ -51,7 +49,7 @@ export const FlowNodeInputMap: Record<
     icon: 'core/workflow/inputType/option'
   },
   [FlowNodeInputTypeEnum.multipleSelect]: {
-    icon: 'core/workflow/inputType/option'
+    icon: 'core/workflow/inputType/multipleSelect'
   },
   [FlowNodeInputTypeEnum.switch]: {
     icon: 'core/workflow/inputType/switch'
@@ -81,7 +79,7 @@ export const FlowNodeInputMap: Record<
     icon: 'core/workflow/inputType/selectDataset'
   },
   [FlowNodeInputTypeEnum.hidden]: {
-    icon: 'core/workflow/inputType/select'
+    icon: 'core/workflow/inputType/internal'
   },
   [FlowNodeInputTypeEnum.customVariable]: {
     icon: 'core/workflow/inputType/customVariable'

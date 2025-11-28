@@ -20,6 +20,7 @@ import {
   removeFastGPTSem
 } from '@/web/support/marketing/utils';
 import { postAcceptInvitationLink } from '@/web/support/user/team/api';
+import { retryFn } from '@fastgpt/global/common/system/utils';
 
 let isOauthLogging = false;
 
@@ -33,7 +34,7 @@ const provider = () => {
 
   const lastRoute = loginStore?.lastRoute
     ? decodeURIComponent(loginStore.lastRoute)
-    : '/dashboard/apps';
+    : '/dashboard/agent';
   const errorRedirectPage = lastRoute.startsWith('/chat') ? lastRoute : '/login';
 
   const loginSuccess = useCallback(
@@ -46,7 +47,7 @@ const provider = () => {
           if (decodeLastRoute.includes('/account/team?invitelinkid=')) {
             const id = decodeLastRoute.split('invitelinkid=')[1];
             await postAcceptInvitationLink(id);
-            return '/dashboard/apps';
+            return '/dashboard/agent';
           } else {
             toast({
               status: 'warning',
@@ -59,7 +60,7 @@ const provider = () => {
           !decodeLastRoute.includes('/login') &&
           decodeLastRoute.startsWith('/')
           ? lastRoute
-          : '/dashboard/apps';
+          : '/dashboard/agent';
       })();
 
       navigateTo && router.replace(navigateTo);
@@ -124,8 +125,8 @@ const provider = () => {
     isOauthLogging = true;
 
     (async () => {
-      await clearToken();
-      router.prefetch('/dashboard/apps');
+      await retryFn(async () => clearToken());
+      router.prefetch('/dashboard/agent');
 
       if (loginStore && loginStore.provider !== 'sso' && state !== loginStore.state) {
         toast({

@@ -33,7 +33,7 @@ import AIModelSelector from '@/components/Select/AIModelSelector';
 import { form2AppWorkflow } from '@/web/core/app/utils';
 import Avatar from '@fastgpt/web/components/common/Avatar';
 import { getDefaultAppForm } from '@fastgpt/global/core/app/utils';
-import { getPreviewPluginNode } from '@/web/core/app/api/plugin';
+import { getToolPreviewNode } from '@/web/core/app/api/tool';
 import type { FlowNodeTemplateType } from '@fastgpt/global/core/workflow/type/node';
 import { getWebLLMModel } from '@/web/common/system/utils';
 import { ChatSettingContext } from '@/web/core/chat/context/chatSettingContext';
@@ -47,7 +47,6 @@ import { ChatRecordContext } from '@/web/core/chat/context/chatRecordContext';
 import { ChatSidebarPaneEnum } from '../constants';
 import ChatHistorySidebar from '@/pageComponents/chat/slider/ChatSliderSidebar';
 import ChatSliderMobileDrawer from '@/pageComponents/chat/slider/ChatSliderMobileDrawer';
-import type { QuickAppType } from '@fastgpt/global/core/chat/setting/type';
 import { getWebReqUrl } from '@fastgpt/web/common/system/utils';
 
 type Props = {
@@ -56,8 +55,11 @@ type Props = {
 
 const defaultFileSelectConfig: AppFileSelectConfigType = {
   maxFiles: 20,
+  canSelectFile: true,
   canSelectImg: false,
-  canSelectFile: true
+  canSelectVideo: false,
+  canSelectAudio: false,
+  canSelectCustomFileExtension: false
 };
 
 const defaultWhisperConfig: AppWhisperConfigType = {
@@ -100,7 +102,7 @@ const HomeChatWindow = ({ myApps }: Props) => {
     () => llmModelList.map((model) => ({ value: model.model, label: model.name })),
     [llmModelList]
   );
-  const [selectedModel, setSelectedModel] = useLocalStorageState('chat_home_model', {
+  const [selectedModel, setSelectedModel] = useLocalStorageState<string>('chat_home_model', {
     defaultValue: defaultModels.llm?.model
   });
 
@@ -238,7 +240,7 @@ const HomeChatWindow = ({ myApps }: Props) => {
 
       const tools: FlowNodeTemplateType[] = await Promise.all(
         selectedToolIds.map(async (toolId) => {
-          const node = await getPreviewPluginNode({ appId: toolId });
+          const node = await getToolPreviewNode({ appId: toolId });
           node.inputs = node.inputs.map((input) => {
             const tool = availableTools.find((tool) => tool.pluginId === toolId);
             const value = tool?.inputs?.[input.key];
@@ -289,6 +291,7 @@ const HomeChatWindow = ({ myApps }: Props) => {
           {availableModels.length > 0 && (
             <Box w={[0, 'auto']} flex={['1 0 0', '0 0 auto']}>
               <AIModelSelector
+                cacheModel={false}
                 h={['30px', '36px']}
                 boxShadow={'none'}
                 size="sm"

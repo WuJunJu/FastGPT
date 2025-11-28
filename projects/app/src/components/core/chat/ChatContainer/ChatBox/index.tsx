@@ -41,13 +41,14 @@ import {
   ChatStatusEnum
 } from '@fastgpt/global/core/chat/constants';
 import {
-  checkIsInteractiveByHistories,
+  getInteractiveByHistories,
   formatChatValue2InputType,
-  setUserSelectResultToHistories
+  setInteractiveResultToHistories
 } from './utils';
 import { ChatTypeEnum, textareaMinH } from './constants';
 import { SseResponseEventEnum } from '@fastgpt/global/core/workflow/runtime/constants';
 import ChatProvider, { ChatBoxContext, type ChatProviderProps } from './Provider';
+import { WorkflowRuntimeContext } from '../context/workflowRuntimeContext';
 import ChatItem from './components/ChatItem';
 import dynamic from 'next/dynamic';
 import type { StreamResponseType } from '@/web/common/api/fetch';
@@ -63,6 +64,8 @@ import TimeBox from './components/TimeBox';
 import MyBox from '@fastgpt/web/components/common/MyBox';
 import { VariableInputEnum } from '@fastgpt/global/core/workflow/constants';
 import { valueTypeFormat } from '@fastgpt/global/core/workflow/runtime/utils';
+import { formatTime2YMDHMS } from '@fastgpt/global/common/string/time';
+import { TeamErrEnum } from '@fastgpt/global/common/error/code/team';
 
 const FeedbackModal = dynamic(() => import('./components/FeedbackModal'));
 const ReadFeedbackModal = dynamic(() => import('./components/ReadFeedbackModal'));
@@ -73,6 +76,7 @@ const VariableInputForm = dynamic(() => import('./components/VariableInputForm')
 const ChatHomeVariablesForm = dynamic(() => import('./components/home/ChatHomeVariablesForm'));
 const WelcomeHomeBox = dynamic(() => import('./components/home/WelcomeHomeBox'));
 const QuickApps = dynamic(() => import('./components/home/QuickApps'));
+const WorkorderEntrance = dynamic(() => import('@/pageComponents/chat/WorkorderEntrance'));
 
 enum FeedbackTypeEnum {
   user = 'user',
@@ -88,6 +92,7 @@ type Props = OutLinkChatAuthProps &
     showVoiceIcon?: boolean;
     showEmptyIntro?: boolean;
     active?: boolean; // can use
+    showWorkorder?: boolean;
 
     onStartChat?: (e: StartChatFnProps) => Promise<
       StreamResponseType & {
@@ -103,13 +108,14 @@ const ChatBox = ({
   showVoiceIcon = true,
   showEmptyIntro = false,
   active = true,
+  showWorkorder,
   onStartChat,
   chatType
 }: Props) => {
   const ScrollContainerRef = useRef<HTMLDivElement>(null);
   const { t } = useTranslation();
   const { toast } = useToast();
-  const { feConfigs } = useSystemStore();
+  const { feConfigs, setNotSufficientModalType } = useSystemStore();
   const { isPc } = useSystem();
   const TextareaDom = useRef<HTMLTextAreaElement>(null);
   const chatController = useRef(new AbortController());
@@ -139,9 +145,9 @@ const ChatBox = ({
   const isChatRecordsLoaded = useContextSelector(ChatRecordContext, (v) => v.isChatRecordsLoaded);
   const ScrollData = useContextSelector(ChatRecordContext, (v) => v.ScrollData);
 
-  const appId = useContextSelector(ChatBoxContext, (v) => v.appId);
-  const chatId = useContextSelector(ChatBoxContext, (v) => v.chatId);
-  const outLinkAuthData = useContextSelector(ChatBoxContext, (v) => v.outLinkAuthData);
+  const appId = useContextSelector(WorkflowRuntimeContext, (v) => v.appId);
+  const chatId = useContextSelector(WorkflowRuntimeContext, (v) => v.chatId);
+  const outLinkAuthData = useContextSelector(WorkflowRuntimeContext, (v) => v.outLinkAuthData);
   const welcomeText = useContextSelector(ChatBoxContext, (v) => v.welcomeText);
   const variableList = useContextSelector(ChatBoxContext, (v) => v.variableList);
   const questionGuide = useContextSelector(ChatBoxContext, (v) => v.questionGuide);
@@ -152,7 +158,7 @@ const ChatBox = ({
   const isChatting = useContextSelector(ChatBoxContext, (v) => v.isChatting);
 
   // Workflow running, there are user input or selection
-  const isInteractive = useMemo(() => checkIsInteractiveByHistories(chatRecords), [chatRecords]);
+  const lastInteractive = useMemo(() => getInteractiveByHistories(chatRecords), [chatRecords]);
 
   const showExternalVariable = useMemo(() => {
     const map: Record<string, boolean> = {
@@ -167,19 +173,32 @@ const ChatBox = ({
   // compute variable input is finish.
   const chatForm = useForm<ChatBoxInputFormType>({
     defaultValues: {
-      input: '',
+      input: sessionStorage.getItem(`chatInput_${chatId}`) || '',
       files: [],
       chatStarted: false
     }
   });
   const { setValue, watch } = chatForm;
   const chatStartedWatch = watch('chatStarted');
+  const inputValue = watch('input');
+
+  useDebounceEffect(
+    () => {
+      if (inputValue) {
+        sessionStorage.setItem(`chatInput_${chatId}`, inputValue);
+      } else {
+        sessionStorage.removeItem(`chatInput_${chatId}`);
+      }
+    },
+    [inputValue, chatId],
+    { wait: 300 }
+  );
 
   const commonVariableList = variableList.filter(
     (item) => item.type !== VariableInputEnum.custom && item.type !== VariableInputEnum.internal
   );
 
-  /* 
+  /*
     对话已经开始的标记：
     1. 保证 appId 一致。
     2. 有对话记录/手动点了开始/默认没有需要填写的变量。
@@ -380,6 +399,8 @@ const ChatBox = ({
     setValue('files', files);
     setValue('input', text);
 
+    sessionStorage.removeItem(`chatInput_${chatId}`);
+
     setTimeout(() => {
       /* 回到最小高度 */
       if (TextareaDom.current) {
@@ -462,12 +483,26 @@ const ChatBox = ({
           // Only declared variables are kept
           const requestVariables: Record<string, any> = {};
           variableList?.forEach((item) => {
-            const val =
+            let val =
               variables[item.key] === '' ||
               variables[item.key] === undefined ||
               variables[item.key] === null
                 ? item.defaultValue
                 : variables[item.key];
+
+            if (item.type === VariableInputEnum.timePointSelect && val) {
+              val = formatTime2YMDHMS(new Date(val));
+            } else if (item.type === VariableInputEnum.timeRangeSelect && val) {
+              val = val.map((item: string) => (item ? formatTime2YMDHMS(new Date(item)) : ''));
+            } else if (item.type === VariableInputEnum.file && Array.isArray(val)) {
+              val = val.map((item) => ({
+                id: item.id,
+                key: item.key,
+                url: item.key ? undefined : item.url,
+                name: item.name,
+                type: item.type
+              }));
+            }
             requestVariables[item.key] = valueTypeFormat(val, item.valueType);
           });
 
@@ -493,7 +528,8 @@ const ChatBox = ({
                     type: file.type,
                     name: file.name,
                     url: file.url || '',
-                    icon: file.icon || ''
+                    icon: file.icon || '',
+                    key: file.key || ''
                   }
                 })),
                 ...(text
@@ -528,7 +564,7 @@ const ChatBox = ({
           setChatRecords(
             isInteractivePrompt
               ? // 把交互的结果存储到对话记录中，交互模式下，不需要新的会话轮次
-                setUserSelectResultToHistories(newChatList.slice(0, -2), text)
+                setInteractiveResultToHistories(newChatList.slice(0, -2), text)
               : newChatList
           );
 
@@ -544,7 +580,14 @@ const ChatBox = ({
 
             // 这里，无论是否为交互模式，最后都是 Human 的消息。
             const messages = chats2GPTMessages({
-              messages: newChatList.slice(0, -1),
+              messages: newChatList.slice(0, -1).map((item) => {
+                if (item.obj === ChatRoleEnum.Human) {
+                  item.files?.forEach((file) => {
+                    file.url = '';
+                  });
+                }
+                return item;
+              }),
               reserveId: true,
               reserveTool: true
             });
@@ -582,11 +625,18 @@ const ChatBox = ({
                   responseData
                 };
               });
+
+              const lastInteractive = getInteractiveByHistories(state);
+              if (lastInteractive?.type === 'paymentPause' && !lastInteractive.params.continue) {
+                setNotSufficientModalType(TeamErrEnum.aiPointsNotEnough);
+              }
+
               return newChatHistories;
             });
 
             setTimeout(() => {
-              if (!checkIsInteractiveByHistories(newChatHistories)) {
+              // If there is no interactive mode, create a question guide
+              if (!getInteractiveByHistories(newChatHistories)) {
                 createQuestionGuide();
               }
 
@@ -635,11 +685,12 @@ const ChatBox = ({
 
   // retry input
   const onDelMessage = useCallback(
-    (contentId: string) => {
+    (contentId: string, delFile = true) => {
       return delChatRecordById({
         appId,
         chatId,
         contentId,
+        delFile,
         ...outLinkAuthData
       });
     },
@@ -656,7 +707,7 @@ const ChatBox = ({
         await Promise.all(
           delHistory.map((item) => {
             if (item.dataId) {
-              return onDelMessage(item.dataId);
+              return onDelMessage(item.dataId, false);
             }
           })
         );
@@ -870,7 +921,7 @@ const ChatBox = ({
     abortRequest('leave');
   }, [chatId, appId, abortRequest, setValue]);
 
-  const canSendPrompt = onStartChat && chatStarted && active && !isInteractive;
+  const canSendPrompt = onStartChat && chatStarted && active && !lastInteractive;
 
   // Add listener
   useEffect(() => {
@@ -972,6 +1023,7 @@ const ChatBox = ({
     }
   }, [ScrollContainerRef, setIsVariableVisible]);
 
+  // Home chat, and no chat records
   const isHomeRender = useMemo(() => {
     return chatType === ChatTypeEnum.home && chatRecords.length === 0 && !chatStartedWatch;
   }, [chatType, chatRecords.length, chatStartedWatch]);
@@ -1079,6 +1131,8 @@ const ChatBox = ({
     showMarkIcon,
     onCloseCustomFeedback
   ]);
+
+  // Child box
   const AppChatRenderBox = useMemo(() => {
     return (
       <ScrollData
@@ -1163,6 +1217,8 @@ const ChatBox = ({
               w={'100%'}
               maxW={['auto', 'min(820px, 100%)']}
             >
+              {showWorkorder && <WorkorderEntrance />}
+
               <ChatInput
                 onSendMessage={sendPrompt}
                 onStop={() => chatController.current?.abort('stop')}

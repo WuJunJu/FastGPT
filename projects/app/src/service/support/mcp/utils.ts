@@ -16,10 +16,10 @@ import { getRunningUserInfoByTmbId } from '@fastgpt/service/support/user/team/ut
 import { getNanoid } from '@fastgpt/global/common/string/tools';
 import { type AIChatItemType, type UserChatItemType } from '@fastgpt/global/core/chat/type';
 import {
-  getPluginRunUserQuery,
-  updatePluginInputByVariables
-} from '@fastgpt/global/core/workflow/utils';
-import { getPluginInputsFromStoreNodes } from '@fastgpt/global/core/app/plugin/utils';
+  serverGetWorkflowToolRunUserQuery,
+  updateWorkflowToolInputByVariables
+} from '@fastgpt/service/core/app/tool/workflowTool/utils';
+import { getWorkflowToolInputsFromStoreNodes } from '@fastgpt/global/core/app/tool/workflowTool/utils';
 import {
   ChatItemValueTypeEnum,
   ChatRoleEnum,
@@ -37,6 +37,7 @@ import { saveChat } from '@fastgpt/service/core/chat/saveChat';
 import { DispatchNodeResponseKeyEnum } from '@fastgpt/global/core/workflow/runtime/constants';
 import { UsageSourceEnum } from '@fastgpt/global/support/wallet/usage/constants';
 import { removeDatasetCiteText } from '@fastgpt/global/core/ai/llm/utils';
+import { clone } from 'lodash';
 
 export const pluginNodes2InputSchema = (
   nodes: { flowNodeType: FlowNodeTypeEnum; inputs: FlowNodeInputItemType[] }[]
@@ -124,7 +125,7 @@ export const getMcpServerTools = async (key: string): Promise<Tool[]> => {
     {
       _id: { $in: mcp.apps.map((app) => app.appId) },
       type: {
-        $in: [AppTypeEnum.simple, AppTypeEnum.workflow, AppTypeEnum.plugin]
+        $in: [AppTypeEnum.simple, AppTypeEnum.workflow, AppTypeEnum.workflowTool]
       }
     },
     { name: 1, intro: 1 }
@@ -171,15 +172,15 @@ export const getMcpServerTools = async (key: string): Promise<Tool[]> => {
 // Call tool
 export const callMcpServerTool = async ({ key, toolName, inputs }: toolCallProps) => {
   const dispatchApp = async (app: AppSchema, variables: Record<string, any>) => {
-    const isPlugin = app.type === AppTypeEnum.plugin;
+    const isPlugin = app.type === AppTypeEnum.workflowTool;
 
     // Get app latest version
     const { nodes, edges, chatConfig } = await getAppLatestVersion(app._id, app);
 
     const userQuestion: UserChatItemType = (() => {
       if (isPlugin) {
-        return getPluginRunUserQuery({
-          pluginInputs: getPluginInputsFromStoreNodes(nodes || app.modules),
+        return serverGetWorkflowToolRunUserQuery({
+          pluginInputs: getWorkflowToolInputsFromStoreNodes(nodes || app.modules),
           variables
         });
       }
@@ -200,7 +201,7 @@ export const callMcpServerTool = async ({ key, toolName, inputs }: toolCallProps
     let runtimeNodes = storeNodes2RuntimeNodes(nodes, getWorkflowEntryNodeIds(nodes));
     if (isPlugin) {
       // Assign values to runtimeNodes using variables
-      runtimeNodes = updatePluginInputByVariables(runtimeNodes, variables);
+      runtimeNodes = updateWorkflowToolInputByVariables(runtimeNodes, variables);
       // Plugin runtime does not need global variables(It has been injected into the pluginInputNode)
       variables = {};
     } else {
@@ -302,7 +303,7 @@ export const callMcpServerTool = async ({ key, toolName, inputs }: toolCallProps
   const appList = await MongoApp.find({
     _id: { $in: mcp.apps.map((app) => app.appId) },
     type: {
-      $in: [AppTypeEnum.simple, AppTypeEnum.workflow, AppTypeEnum.plugin]
+      $in: [AppTypeEnum.simple, AppTypeEnum.workflow, AppTypeEnum.workflowTool]
     }
   }).lean();
 

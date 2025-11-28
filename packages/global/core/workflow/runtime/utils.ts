@@ -20,17 +20,7 @@ import type { StoreNodeItemType } from '../type/node';
 import { isValidReferenceValueFormat } from '../utils';
 import type { RuntimeEdgeItemType, RuntimeNodeItemType } from './type';
 import { isSecretValue } from '../../../common/secret/utils';
-
-export const checkIsBranchNode = (node: RuntimeNodeItemType) => {
-  if (node.catchError) return true;
-
-  const map: Record<any, boolean> = {
-    [FlowNodeTypeEnum.classifyQuestion]: true,
-    [FlowNodeTypeEnum.userSelect]: true,
-    [FlowNodeTypeEnum.ifElseNode]: true
-  };
-  return !!map[node.flowNodeType];
-};
+import { isChildInteractive } from '../template/system/interactive/constants';
 
 export const extractDeepestInteractive = (
   interactive: WorkflowInteractiveResponseType
@@ -39,11 +29,7 @@ export const extractDeepestInteractive = (
   let current = interactive;
   let depth = 0;
 
-  while (
-    depth < MAX_DEPTH &&
-    (current?.type === 'childrenInteractive' || current?.type === 'loopInteractive') &&
-    current.params?.childrenResponse
-  ) {
+  while (depth < MAX_DEPTH && 'childrenResponse' in current.params) {
     current = current.params.childrenResponse;
     depth++;
   }
@@ -192,10 +178,7 @@ export const getLastInteractiveValue = (
       return;
     }
 
-    if (
-      lastValue.interactive.type === 'childrenInteractive' ||
-      lastValue.interactive.type === 'loopInteractive'
-    ) {
+    if (isChildInteractive(lastValue.interactive.type)) {
       return lastValue.interactive;
     }
 
@@ -209,6 +192,10 @@ export const getLastInteractiveValue = (
 
     // Check is user input
     if (lastValue.interactive.type === 'userInput' && !lastValue.interactive.params.submitted) {
+      return lastValue.interactive;
+    }
+
+    if (lastValue.interactive.type === 'paymentPause' && !lastValue.interactive.params.continue) {
       return lastValue.interactive;
     }
   }
@@ -304,47 +291,53 @@ export const checkNodeRunStatus = ({
   node: RuntimeNodeItemType;
   runtimeEdges: RuntimeEdgeItemType[];
 }) => {
-  const filterRuntimeEdges = filterWorkflowEdges(runtimeEdges);
-
+  const isStartNode = (nodeType: string) => {
+    const map: Record<any, boolean> = {
+      [FlowNodeTypeEnum.workflowStart]: true,
+      [FlowNodeTypeEnum.pluginInput]: true,
+      [FlowNodeTypeEnum.loopStart]: true
+    };
+    return !!map[nodeType];
+  };
   const splitNodeEdges = (targetNode: RuntimeNodeItemType) => {
     const commonEdges: RuntimeEdgeItemType[] = [];
     const recursiveEdgeGroupsMap = new Map<string, RuntimeEdgeItemType[]>();
 
-    const getEdgeLastBranchHandle = ({
-      startEdge,
-      targetNodeId
-    }: {
-      startEdge: RuntimeEdgeItemType;
-      targetNodeId: string;
-    }): string | '' | undefined => {
+    const sourceEdges = runtimeEdges.filter((item) => item.target === targetNode.nodeId);
+
+    sourceEdges.forEach((sourceEdge) => {
       const stack: Array<{
         edge: RuntimeEdgeItemType;
         visited: Set<string>;
-        lasestBranchHandle?: string;
       }> = [
         {
-          edge: startEdge,
-          visited: new Set([targetNodeId])
+          edge: sourceEdge,
+          visited: new Set([targetNode.nodeId])
         }
       ];
-
       const MAX_DEPTH = 3000;
       let iterations = 0;
 
       while (stack.length > 0 && iterations < MAX_DEPTH) {
         iterations++;
-        const { edge, visited, lasestBranchHandle } = stack.pop()!;
+        const { edge, visited } = stack.pop()!;
 
-        // Circle
+        // Start node
+        const sourceNode = nodesMap.get(edge.source);
+        if (!sourceNode) continue;
+
+        if (isStartNode(sourceNode.flowNodeType) || sourceEdge.sourceHandle === 'selectedTools') {
+          commonEdges.push(sourceEdge);
+          continue;
+        }
+
+        // Circle detected
         if (edge.source === targetNode.nodeId) {
-          // 检查自身是否为分支节点
-          const node = nodesMap.get(edge.source);
-          if (!node) return '';
-          const isBranch = checkIsBranchNode(node);
-          if (isBranch) return edge.sourceHandle;
-
-          // 检测到环,并且环中包含当前节点. 空字符代表是一个无分支循环，属于死循环，则忽略这个边。
-          return lasestBranchHandle ?? '';
+          recursiveEdgeGroupsMap.set(edge.target, [
+            ...(recursiveEdgeGroupsMap.get(edge.target) || []),
+            sourceEdge
+          ]);
+          continue;
         }
 
         if (visited.has(edge.source)) {
@@ -355,43 +348,14 @@ export const checkNodeRunStatus = ({
         newVisited.add(edge.source);
 
         // 查找目标节点的 source edges 并加入栈中
-        const nextEdges = filterRuntimeEdges.filter((item) => item.target === edge.source);
-        for (const nextEdge of nextEdges) {
-          const node = nodesMap.get(nextEdge.target);
-          if (!node) continue;
-          const isBranch = checkIsBranchNode(node);
+        const nextEdges = runtimeEdges.filter((item) => item.target === edge.source);
 
+        for (const nextEdge of nextEdges) {
           stack.push({
             edge: nextEdge,
-            visited: newVisited,
-            lasestBranchHandle: isBranch ? edge.sourceHandle : lasestBranchHandle
+            visited: newVisited
           });
         }
-      }
-
-      return;
-    };
-
-    const sourceEdges = filterRuntimeEdges.filter((item) => item.target === targetNode.nodeId);
-    sourceEdges.forEach((edge) => {
-      const lastBranchHandle = getEdgeLastBranchHandle({
-        startEdge: edge,
-        targetNodeId: targetNode.nodeId
-      });
-
-      // 无效的循环，这条边则忽略
-      if (lastBranchHandle === '') return;
-
-      // 有效循环，则加入递归组
-      if (lastBranchHandle) {
-        recursiveEdgeGroupsMap.set(lastBranchHandle, [
-          ...(recursiveEdgeGroupsMap.get(lastBranchHandle) || []),
-          edge
-        ]);
-      }
-      // 无循环的连线，则加入普通组
-      else {
-        commonEdges.push(edge);
       }
     });
 

@@ -7,15 +7,20 @@ import axios from 'axios';
 import { serverRequestBaseUrl } from '../../../../common/api/serverRequest';
 import { getErrText } from '@fastgpt/global/common/error/utils';
 import { detectFileEncoding, parseUrlToFileType } from '@fastgpt/global/common/file/tools';
-import { readRawContentByFileBuffer } from '../../../../common/file/read/utils';
+import { readS3FileContentByBuffer } from '../../../../common/file/read/utils';
 import { ChatRoleEnum } from '@fastgpt/global/core/chat/constants';
 import { type ChatItemType, type UserChatItemValueItemType } from '@fastgpt/global/core/chat/type';
-import { parseFileExtensionFromUrl } from '@fastgpt/global/common/string/tools';
 import { addLog } from '../../../../common/system/log';
 import { addRawTextBuffer, getRawTextBuffer } from '../../../../common/buffer/rawText/controller';
-import { addMinutes } from 'date-fns';
+import { addDays, addMinutes } from 'date-fns';
 import { getNodeErrResponse } from '../utils';
 import { isInternalAddress } from '../../../../common/system/utils';
+import { replaceDatasetQuoteTextWithJWT } from '../../../dataset/utils';
+import { getFileS3Key } from '../../../../common/s3/utils';
+import { S3ChatSource } from '../../../../common/s3/sources/chat';
+import path from 'path';
+import { S3Buckets } from '../../../../common/s3/constants';
+import { S3Sources } from '../../../../common/s3/type';
 import { extractFileIdFromUrl, isValidFileId, checkFileTokenExpired } from '../ai/utils';
 import { chatValue2RuntimePrompt } from '@fastgpt/global/core/chat/adapt';
 
@@ -33,6 +38,7 @@ type Props = ModuleDispatchProps<{
 }>;
 type Response = DispatchNodeResultType<{
   [NodeOutputKeyEnum.text]: string;
+  [NodeOutputKeyEnum.rawResponse]: ReturnType<typeof formatResponseObject>[];
 }>;
 
 const formatResponseObject = ({
@@ -174,10 +180,12 @@ export const dispatchReadFiles = async (props: Props): Promise<Response> => {
       fileErrors.length > 0
         ? `\n\n--- File Access Errors ---\n${fileErrors.join('\n')}\n--- End of Errors ---`
         : '';
+    const textWithError = text + errorText;
 
     return {
       data: {
-        [NodeOutputKeyEnum.text]: text + errorText
+        [NodeOutputKeyEnum.text]: textWithError,
+        [NodeOutputKeyEnum.rawResponse]: readFilesResult
       },
       [DispatchNodeResponseKeyEnum.nodeResponse]: {
         readFiles: readFilesResult.map((item) => ({
@@ -189,7 +197,7 @@ export const dispatchReadFiles = async (props: Props): Promise<Response> => {
           .join('\n******\n')
       },
       [DispatchNodeResponseKeyEnum.toolResponses]: {
-        fileContent: text + errorText
+        fileContent: textWithError
       }
     };
   } catch (error) {
@@ -252,11 +260,9 @@ export const getFileContentFromLinks = async ({
     .map((url) => {
       try {
         // Check is system upload file
-        if (url.startsWith('/') || (requestOrigin && url.startsWith(requestOrigin))) {
-          //  Remove the origin(Make intranet requests directly)
-          if (requestOrigin && url.startsWith(requestOrigin)) {
-            url = url.replace(requestOrigin, '');
-          }
+        const parsedURL = new URL(url, 'http://localhost:3000');
+        if (requestOrigin && parsedURL.origin === requestOrigin) {
+          url = url.replace(requestOrigin, '');
         }
 
         return url;
@@ -285,6 +291,7 @@ export const getFileContentFromLinks = async ({
           if (isInternalAddress(url)) {
             return Promise.reject('Url is invalid');
           }
+
           // Get file buffer data
           const response = await axios.get(url, {
             baseURL: serverRequestBaseUrl,
@@ -293,21 +300,39 @@ export const getFileContentFromLinks = async ({
 
           const buffer = Buffer.from(response.data, 'binary');
 
+          const urlObj = new URL(url, 'http://localhost:3000');
+          const isChatExternalUrl = !urlObj.pathname.startsWith(
+            `/${S3Buckets.private}/${S3Sources.chat}/`
+          );
+
           // Get file name
-          const filename = (() => {
+          const { filename, extension, imageParsePrefix } = (() => {
             const contentDisposition = response.headers['content-disposition'];
             if (contentDisposition) {
               const filenameRegex = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/;
               const matches = filenameRegex.exec(contentDisposition);
               if (matches != null && matches[1]) {
-                return decodeURIComponent(matches[1].replace(/['"]/g, ''));
+                const filename = decodeURIComponent(matches[1].replace(/['"]/g, ''));
+                return {
+                  filename,
+                  extension: path.extname(filename).replace('.', ''),
+                  imageParsePrefix: `` // TODO: 需要根据是否是聊天对话里面的外部链接来决定
+                };
               }
             }
 
-            return url;
+            if (isChatExternalUrl) {
+              const filename = urlObj.pathname.split('/').pop() || 'file';
+              const extension = path.extname(filename).replace('.', '');
+              return {
+                filename,
+                extension,
+                imageParsePrefix: getFileS3Key.temp({ teamId, filename }).fileParsedPrefix
+              };
+            }
+
+            return S3ChatSource.parseChatUrl(url);
           })();
-          // Extension
-          const extension = parseFileExtensionFromUrl(filename);
 
           // Get encoding
           const encoding = (() => {
@@ -323,8 +348,7 @@ export const getFileContentFromLinks = async ({
             return detectFileEncoding(buffer);
           })();
 
-          // Read file
-          const { rawText } = await readRawContentByFileBuffer({
+          const { rawText } = await readS3FileContentByBuffer({
             extension,
             teamId,
             tmbId,
@@ -332,18 +356,27 @@ export const getFileContentFromLinks = async ({
             encoding,
             customPdfParse,
             getFormatText: true,
+            imageKeyOptions: imageParsePrefix
+              ? {
+                  prefix: imageParsePrefix,
+                  // 聊天对话里面上传的外部链接，解析出来的图片过期时间设置为1天，而且是存储在临时文件夹的
+                  expiredTime: isChatExternalUrl ? addDays(new Date(), 1) : undefined
+                }
+              : undefined,
             usageId
           });
+
+          const replacedText = replaceDatasetQuoteTextWithJWT(rawText, addDays(new Date(), 90));
 
           // Add to buffer
           addRawTextBuffer({
             sourceId: url,
             sourceName: filename,
-            text: rawText,
+            text: replacedText,
             expiredTime: addMinutes(new Date(), 20)
           });
 
-          return formatResponseObject({ filename, url, content: rawText });
+          return formatResponseObject({ filename, url, content: replacedText });
         } catch (error) {
           return formatResponseObject({
             filename: '',

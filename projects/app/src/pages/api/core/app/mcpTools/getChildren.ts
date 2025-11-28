@@ -2,7 +2,7 @@ import type { ApiRequestProps, ApiResponseType } from '@fastgpt/service/type/nex
 import { NextAPI } from '@/service/middleware/entry';
 import { MongoApp } from '@fastgpt/service/core/app/schema';
 import { AppTypeEnum } from '@fastgpt/global/core/app/constants';
-import type { McpToolConfigType } from '@fastgpt/global/core/app/type';
+import type { McpToolConfigType } from '@fastgpt/global/core/app/tool/mcpTool/type';
 import { UserError } from '@fastgpt/global/common/error/utils';
 import { getMCPChildren } from '@fastgpt/service/core/app/mcp';
 import { replaceRegChars } from '@fastgpt/global/common/string/tools';
@@ -27,7 +27,7 @@ async function handler(
 
   if (!app) return Promise.reject(new UserError('No Mcp Toolset found'));
 
-  if (app.type !== AppTypeEnum.toolSet)
+  if (app.type !== AppTypeEnum.mcpToolSet)
     return Promise.reject(new UserError('the parent is not a mcp toolset'));
 
   return (await getMCPChildren(app)).filter((item) => {

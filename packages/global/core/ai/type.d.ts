@@ -19,10 +19,11 @@ export type ChatCompletionContentPartFile = {
   type: 'file_url';
   name: string;
   url: string;
+  key?: string;
 };
 // Rewrite ChatCompletionContentPart, Add file type
 export type ChatCompletionContentPart =
-  | SdkChatCompletionContentPart
+  | (SdkChatCompletionContentPart & { key?: string })
   | ChatCompletionContentPartFile;
 type CustomChatCompletionUserMessageParam = Omit<ChatCompletionUserMessageParam, 'content'> & {
   role: 'user';
@@ -79,7 +80,8 @@ export type CompletionFinishReason =
   | 'tool_calls'
   | 'content_filter'
   | 'function_call'
-  | null;
+  | null
+  | undefined;
 
 export default openai;
 export * from 'openai';

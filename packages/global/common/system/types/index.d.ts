@@ -47,12 +47,13 @@ export type FastGPTFeConfigsType = {
   isPlus?: boolean;
   hideChatCopyrightSetting?: boolean;
   register_method?: ['email' | 'phone' | 'sync'];
-  login_method?: ['email' | 'phone']; // Attention: login method is diffrent with oauth
+  login_method?: ['email' | 'phone']; // Attention: login method is different with oauth
   find_password_method?: ['email' | 'phone'];
   bind_notification_method?: ['email' | 'phone'];
   googleClientVerKey?: string;
   mcpServerProxyEndpoint?: string;
   chineseRedirectUrl?: string;
+  botIframeUrl?: string;
 
   show_emptyChat?: boolean;
   show_appStore?: boolean;
@@ -79,7 +80,7 @@ export type FastGPTFeConfigsType = {
   concatMd?: string;
   docUrl?: string;
   openAPIDocUrl?: string;
-  systemPluginCourseUrl?: string;
+  submitPluginRequestUrl?: string;
   appTemplateCourse?: string;
   customApiDomain?: string;
   customSharePageDomain?: string;

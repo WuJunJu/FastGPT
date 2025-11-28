@@ -11,7 +11,7 @@ export async function register() {
         { connectMongo },
         { connectionMongo, connectionLogMongo, MONGO_URL, MONGO_LOG_URL },
         { systemStartCb },
-        { initGlobalVariables, getInitConfig, initSystemPluginGroups, initAppTemplateTypes },
+        { initGlobalVariables, getInitConfig, initSystemPluginTags, initAppTemplateTypes },
         { initVectorStore },
         { initRootUser },
         { startMongoWatch },
@@ -21,7 +21,9 @@ export async function register() {
         { loadSystemModels },
         { connectSignoz },
         { getSystemTools },
-        { trackTimerProcess }
+        { trackTimerProcess },
+        { initBullMQWorkers },
+        { initS3Buckets }
       ] = await Promise.all([
         import('@fastgpt/service/common/mongo/init'),
         import('@fastgpt/service/common/mongo/index'),
@@ -35,8 +37,10 @@ export async function register() {
         import('@fastgpt/service/worker/preload'),
         import('@fastgpt/service/core/ai/config/utils'),
         import('@fastgpt/service/common/otel/trace/register'),
-        import('@fastgpt/service/core/app/plugin/controller'),
-        import('@fastgpt/service/common/middle/tracks/processor')
+        import('@fastgpt/service/core/app/tool/controller'),
+        import('@fastgpt/service/common/middle/tracks/processor'),
+        import('@/service/common/bullmq'),
+        import('@fastgpt/service/common/s3')
       ]);
 
       // connect to signoz
@@ -46,9 +50,22 @@ export async function register() {
       systemStartCb();
       initGlobalVariables();
 
+      // init s3 buckets
+      initS3Buckets();
+
       // Connect to MongoDB
-      await connectMongo(connectionMongo, MONGO_URL);
-      connectMongo(connectionLogMongo, MONGO_LOG_URL);
+      await Promise.all([
+        connectMongo({
+          db: connectionMongo,
+          url: MONGO_URL,
+          connectedCb: () => startMongoWatch()
+        }),
+        initBullMQWorkers()
+      ]);
+      connectMongo({
+        db: connectionLogMongo,
+        url: MONGO_LOG_URL
+      });
 
       //init system config；init vector database；init root user
       await Promise.all([getInitConfig(), initVectorStore(), initRootUser(), loadSystemModels()]);
@@ -56,11 +73,10 @@ export async function register() {
       await Promise.all([
         preLoadWorker().catch(),
         getSystemTools(),
-        initSystemPluginGroups(),
+        initSystemPluginTags(),
         initAppTemplateTypes()
       ]);
 
-      startMongoWatch();
       startCron();
       startTrainingQueue(true);
       trackTimerProcess();

@@ -14,6 +14,7 @@ import {
 import FilesBlock from './FilesBox';
 import { ChatBoxContext } from '../Provider';
 import { useContextSelector } from 'use-context-selector';
+import { WorkflowRuntimeContext } from '../../context/workflowRuntimeContext';
 import AIResponseBox from '../../../components/AIResponseBox';
 import { useCopyData } from '@fastgpt/web/hooks/useCopyData';
 import MyIcon from '@fastgpt/web/components/common/Icon';
@@ -158,9 +159,9 @@ const ChatItem = (props: Props) => {
   const chatType = useContextSelector(ChatBoxContext, (v) => v.chatType);
   const showNodeStatus = useContextSelector(ChatItemContext, (v) => v.showNodeStatus);
 
-  const appId = useContextSelector(ChatBoxContext, (v) => v.appId);
-  const chatId = useContextSelector(ChatBoxContext, (v) => v.chatId);
-  const outLinkAuthData = useContextSelector(ChatBoxContext, (v) => v.outLinkAuthData);
+  const appId = useContextSelector(WorkflowRuntimeContext, (v) => v.appId);
+  const chatId = useContextSelector(WorkflowRuntimeContext, (v) => v.chatId);
+  const outLinkAuthData = useContextSelector(WorkflowRuntimeContext, (v) => v.outLinkAuthData);
   const isShowReadRawSource = useContextSelector(ChatItemContext, (v) => v.isShowReadRawSource);
 
   const { totalQuoteList: quoteList = [] } = useMemo(
@@ -177,7 +178,7 @@ const ChatItem = (props: Props) => {
     return colorMap[statusBoxData.status];
   }, [statusBoxData?.status]);
 
-  /* 
+  /*
     1. The interactive node is divided into n dialog boxes.
     2. Auto-complete the last textnode
   */

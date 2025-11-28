@@ -17,6 +17,7 @@ import { GetChatTypeEnum } from '@/global/core/chat/constants';
 import { type PaginationProps, type PaginationResponse } from '@fastgpt/web/common/fetch/type';
 import { type ChatItemType } from '@fastgpt/global/core/chat/type';
 import { parsePaginationRequest } from '@fastgpt/service/common/api/pagination';
+import { addPreviewUrlToChatItems } from '@fastgpt/service/core/chat/utils';
 
 export type getPaginationRecordsQuery = {};
 
@@ -52,7 +53,7 @@ async function handler(
   if (!app) {
     return Promise.reject(AppErrEnum.unExist);
   }
-  const isPlugin = app.type === AppTypeEnum.plugin;
+  const isPlugin = app.type === AppTypeEnum.workflowTool;
   const isOutLink = authType === GetChatTypeEnum.outLink;
 
   const commonField = `obj value adminFeedback userGoodFeedback userBadFeedback time hideInUI durationSeconds errorMsg ${DispatchNodeResponseKeyEnum.nodeResponse}`;
@@ -71,8 +72,11 @@ async function handler(
     limit: pageSize
   });
 
+  // Presign file urls
+  await addPreviewUrlToChatItems(histories, isPlugin ? 'workflowTool' : 'chatFlow');
+
   // Remove important information
-  if (isOutLink && app.type !== AppTypeEnum.plugin) {
+  if (isOutLink && app.type !== AppTypeEnum.workflowTool) {
     histories.forEach((item) => {
       if (item.obj === ChatRoleEnum.AI) {
         item.responseData = filterPublicNodeResponseData({

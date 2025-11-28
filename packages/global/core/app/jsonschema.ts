@@ -4,7 +4,8 @@ import type { FlowNodeInputItemType, FlowNodeOutputItemType } from '../workflow/
 import SwaggerParser from '@apidevtools/swagger-parser';
 import yaml from 'js-yaml';
 import type { OpenAPIV3 } from 'openapi-types';
-import type { OpenApiJsonSchema } from './httpTools/type';
+import type { OpenApiJsonSchema } from './tool/httpTool/type';
+import { i18nT } from '../../../web/i18n/utils';
 
 type SchemaInputValueType = 'string' | 'number' | 'integer' | 'boolean' | 'array' | 'object';
 export type JsonSchemaPropertiesItemType = {
@@ -83,13 +84,19 @@ const getNodeInputRenderTypeFromSchemaInputType = ({
   }
   return { renderTypeList: [FlowNodeInputTypeEnum.JSONEditor, FlowNodeInputTypeEnum.reference] };
 };
-export const jsonSchema2NodeInput = (jsonSchema: JSONSchemaInputType): FlowNodeInputItemType[] => {
+export const jsonSchema2NodeInput = ({
+  jsonSchema,
+  schemaType
+}: {
+  jsonSchema: JSONSchemaInputType;
+  schemaType: 'mcp' | 'http';
+}): FlowNodeInputItemType[] => {
   return Object.entries(jsonSchema?.properties || {}).map(([key, value]) => ({
     key,
     label: key,
     valueType: getNodeInputTypeFromSchemaInputType({ type: value.type, arrayItems: value.items }),
     description: value.description,
-    toolDescription: value['x-tool-description'] ?? value.description ?? key,
+    toolDescription: schemaType === 'http' ? value['x-tool-description'] : value.description || key,
     required: jsonSchema?.required?.includes(key),
     ...getNodeInputRenderTypeFromSchemaInputType(value)
   }));
@@ -180,7 +187,7 @@ export const str2OpenApiSchema = async (yamlStr = ''): Promise<OpenApiJsonSchema
       .filter(Boolean) as OpenApiJsonSchema['pathData'];
     return { pathData, serverPath };
   } catch (err) {
-    throw new Error('Invalid Schema');
+    return Promise.reject(i18nT('common:plugin.Invalid Schema'));
   }
 };
 export const getSchemaValueType = (schema: { type: string; items?: { type: string } }) => {

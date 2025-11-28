@@ -2,9 +2,9 @@ import type { ChatNodeUsageType } from '../../../support/wallet/bill/type';
 import type {
   ChatItemType,
   ToolRunResponseItemType,
-  AIChatItemValueItemType
+  AIChatItemValueItemType,
+  ChatHistoryItemResType
 } from '../../chat/type';
-import { NodeOutputItemType } from '../../chat/type';
 import type { FlowNodeInputItemType, FlowNodeOutputItemType } from '../type/io.d';
 import type { NodeToolConfigType, StoreNodeItemType } from '../type/node';
 import type { DispatchNodeResponseKeyEnum } from './constants';
@@ -30,6 +30,8 @@ import type {
 } from '../template/system/interactive/type';
 import type { SearchDataResponseItemType } from '../../dataset/type';
 import type { localeType } from '../../../common/i18n/type';
+import { type UserChatItemValueItemType } from '../../chat/type';
+
 export type ExternalProviderType = {
   openaiAccount?: OpenaiAccountType;
   externalWorkflowVariables?: Record<string, string>;
@@ -65,6 +67,7 @@ export type ChatDispatchProps = {
   responseChatItemId?: string;
   histories: ChatItemType[];
   variables: Record<string, any>; // global variable
+  cloneVariables: Record<string, any>;
   query: UserChatItemValueItemType[]; // trigger query
   chatConfig: AppSchema['chatConfig'];
   lastInteractive?: WorkflowInteractiveResponseType; // last interactive response
@@ -87,6 +90,8 @@ export type ModuleDispatchProps<T> = ChatDispatchProps & {
   runtimeNodes: RuntimeNodeItemType[];
   runtimeEdges: RuntimeEdgeItemType[];
   params: T;
+
+  mcpClientMemory: Record<string, MCPClient>; // key: url
 };
 
 export type SystemVariablesType = {
@@ -102,7 +107,7 @@ export type SystemVariablesType = {
 export type RuntimeNodeItemType = {
   nodeId: StoreNodeItemType['nodeId'];
   name: StoreNodeItemType['name'];
-  avatar: StoreNodeItemType['avatar'];
+  avatar?: StoreNodeItemType['avatar'];
   intro?: StoreNodeItemType['intro'];
   toolDescription?: StoreNodeItemType['toolDescription'];
   flowNodeType: StoreNodeItemType['flowNodeType'];
@@ -243,7 +248,7 @@ export type DispatchNodeResponseType = {
   loopOutputValue?: any;
 
   // form input
-  formInputResult?: string;
+  formInputResult?: Record<string, any>;
 
   // tool params
   toolParamsResult?: Record<string, any>;

@@ -10,7 +10,8 @@ import type {
   SearchScoreTypeEnum,
   TrainingModeEnum,
   ChunkSettingModeEnum,
-  ChunkTriggerConfigTypeEnum
+  ChunkTriggerConfigTypeEnum,
+  ParagraphChunkAIModeEnum
 } from './constants';
 import type { DatasetPermission } from '../../support/permission/dataset/controller';
 import type {
@@ -117,6 +118,7 @@ export type DatasetCollectionSchemaType = ChunkSettingsType & {
 
   rawTextLength?: number;
   hashRawText?: string;
+
   metadata?: {
     webPageSelector?: string;
     relatedImgId?: string; // The id of the associated image collections
@@ -249,7 +251,10 @@ export type TagUsageType = {
 export type DatasetCollectionItemType = CollectionWithDatasetType & {
   sourceName: string;
   sourceId?: string;
-  file?: DatasetFileSchema;
+  file?: {
+    filename?: string;
+    contentLength?: number;
+  };
   permission: DatasetPermission;
   indexAmount: number;
   errorCount?: number;

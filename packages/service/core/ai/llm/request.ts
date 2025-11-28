@@ -15,7 +15,7 @@ import { removeDatasetCiteText } from '@fastgpt/global/core/ai/llm/utils';
 import { getAIApi } from '../config';
 import type { OpenaiAccountType } from '@fastgpt/global/support/user/team/type';
 import { getNanoid } from '@fastgpt/global/common/string/tools';
-import { parsePromptToolCall, promptToolCallMessageRewrite } from './promptToolCall';
+import { parsePromptToolCall, promptToolCallMessageRewrite } from './promptCall';
 import { getLLMModel } from '../model';
 import { ChatCompletionRequestMessageRoleEnum } from '@fastgpt/global/core/ai/constants';
 import { countGptMessagesTokens } from '../../../common/string/tiktoken/index';
@@ -26,14 +26,14 @@ import { i18nT } from '../../../../web/i18n/utils';
 import { getErrText } from '@fastgpt/global/common/error/utils';
 import json5 from 'json5';
 
-type ResponseEvents = {
+export type ResponseEvents = {
   onStreaming?: ({ text }: { text: string }) => void;
   onReasoning?: ({ text }: { text: string }) => void;
   onToolCall?: ({ call }: { call: ChatCompletionMessageToolCall }) => void;
   onToolParam?: ({ tool, params }: { tool: ChatCompletionMessageToolCall; params: string }) => void;
 };
 
-type CreateLLMResponseProps<T extends CompletionsBodyType> = {
+export type CreateLLMResponseProps<T extends CompletionsBodyType = CompletionsBodyType> = {
   userKey?: OpenaiAccountType;
   body: LLMRequestBodyType<T>;
   isAborted?: () => boolean | undefined;
@@ -57,7 +57,7 @@ type LLMResponse = {
   completeMessages: ChatCompletionMessageParam[];
 };
 
-/* 
+/*
   底层封装 LLM 调用 帮助上层屏蔽 stream 和非 stream，以及 toolChoice 和 promptTool 模式。
   工具调用无论哪种模式，都存 toolChoice 的格式，promptTool 通过修改 toolChoice 的结构，形成特定的 messages 进行调用。
 */
@@ -243,7 +243,7 @@ export const createStreamResponse = async ({
                   type: 'function',
                   function: callingTool!
                 };
-                toolCalls.push(call);
+                toolCalls[index] = call;
                 onToolCall?.({ call });
                 callingTool = null;
               }
@@ -268,7 +268,7 @@ export const createStreamResponse = async ({
         reasoningText: reasoningContent,
         finish_reason,
         usage,
-        toolCalls
+        toolCalls: toolCalls.filter((call) => !!call)
       };
     } else {
       let startResponseWrite = false;

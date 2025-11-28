@@ -9,7 +9,7 @@ import { useMemoizedFn } from 'ahooks';
 import React from 'react';
 import { XYPosition } from 'reactflow';
 import { useContextSelector } from 'use-context-selector';
-import { WorkflowNodeEdgeContext } from '../context/workflowInitContext';
+import { WorkflowBufferDataContext } from '../context/workflowInitContext';
 
 type ModuleTemplateListProps = {
   isOpen: boolean;
@@ -19,7 +19,7 @@ type ModuleTemplateListProps = {
 export const sliderWidth = 460;
 
 const NodeTemplatesModal = ({ isOpen, onClose }: ModuleTemplateListProps) => {
-  const setNodes = useContextSelector(WorkflowNodeEdgeContext, (v) => v.setNodes);
+  const setNodes = useContextSelector(WorkflowBufferDataContext, (v) => v.setNodes);
 
   const {
     templateType,
@@ -29,7 +29,10 @@ const NodeTemplatesModal = ({ isOpen, onClose }: ModuleTemplateListProps) => {
     templatesIsLoading,
     templates,
     onUpdateTemplateType,
-    onUpdateParentId
+    onUpdateParentId,
+    selectedTagIds,
+    setSelectedTagIds,
+    toolTags
   } = useNodeTemplates();
 
   const onAddNode = useMemoizedFn(async ({ newNodes }: { newNodes: Node<FlowNodeItemType>[] }) => {
@@ -86,6 +89,9 @@ const NodeTemplatesModal = ({ isOpen, onClose }: ModuleTemplateListProps) => {
           searchKey={searchKey}
           setSearchKey={setSearchKey}
           onUpdateParentId={onUpdateParentId}
+          selectedTagIds={selectedTagIds}
+          setSelectedTagIds={setSelectedTagIds}
+          toolTags={toolTags}
         />
         <NodeTemplateList
           onAddNode={onAddNode}

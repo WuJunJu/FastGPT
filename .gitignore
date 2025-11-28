@@ -39,6 +39,8 @@ tmp/
 coverage
 document/.source
 
+projects/app/worker/
+
 # codex
 .codex
 

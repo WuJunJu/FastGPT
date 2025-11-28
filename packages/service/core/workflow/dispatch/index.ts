@@ -43,7 +43,7 @@ import type { ChatNodeUsageType } from '@fastgpt/global/support/wallet/bill/type
 import { addLog } from '../../../common/system/log';
 import { surrenderProcess } from '../../../common/system/tools';
 import type { DispatchFlowResponse, WorkflowDebugResponse } from './type';
-import { rewriteRuntimeWorkFlow, removeSystemVariable } from './utils';
+import { rewriteRuntimeWorkFlow, runtimeSystemVar2StoreType } from './utils';
 import { getHandleId } from '@fastgpt/global/core/workflow/utils';
 import { callbackMap } from './constants';
 import { anyValueDecrypt } from '../../../common/secret/utils';
@@ -52,8 +52,17 @@ import { checkTeamAIPoints } from '../../../support/permission/teamLimit';
 import type { UsageSourceEnum } from '@fastgpt/global/support/wallet/usage/constants';
 import { createChatUsageRecord, pushChatItemUsage } from '../../../support/wallet/usage/controller';
 import type { RequireOnlyOne } from '@fastgpt/global/common/type/utils';
+import { getS3ChatSource } from '../../../common/s3/sources/chat';
+import { addPreviewUrlToChatItems, presignVariablesFileUrls } from '../../chat/utils';
+import type { MCPClient } from '../../app/mcp';
+import { TeamErrEnum } from '@fastgpt/global/common/error/code/team';
+import { i18nT } from '../../../../web/i18n/utils';
+import { clone } from 'lodash';
 
-type Props = Omit<ChatDispatchProps, 'workflowDispatchDeep' | 'timezone' | 'externalProvider'> & {
+type Props = Omit<
+  ChatDispatchProps,
+  'workflowDispatchDeep' | 'timezone' | 'externalProvider' | 'cloneVariables'
+> & {
   runtimeNodes: RuntimeNodeItemType[];
   runtimeEdges: RuntimeEdgeItemType[];
   defaultSkipNodeQueue?: WorkflowDebugResponse['skipNodeQueue'];
@@ -77,7 +86,7 @@ export async function dispatchWorkFlow({
   concatUsage,
   ...data
 }: Props & WorkflowUsageProps): Promise<DispatchFlowResponse> {
-  const { res, stream, runningUserInfo, runningAppInfo, lastInteractive } = data;
+  const { res, stream, runningUserInfo, runningAppInfo, lastInteractive, histories, query } = data;
 
   await checkTeamAIPoints(runningUserInfo.teamId);
   const [{ timezone, externalProvider }, newUsageId] = await Promise.all([
@@ -128,35 +137,59 @@ export async function dispatchWorkFlow({
     }
   }
 
+  // Add preview url to chat items
+  await addPreviewUrlToChatItems(histories, 'chatFlow');
+  for (const item of query) {
+    if (item.type !== ChatItemValueTypeEnum.file || !item.file?.key) continue;
+    item.file.url = await getS3ChatSource().createGetChatFileURL({
+      key: item.file.key,
+      external: true
+    });
+  }
+
   // Get default variables
+  const cloneVariables = clone(data.variables);
   const defaultVariables = {
     ...externalProvider.externalWorkflowVariables,
-    ...getSystemVariables({
+    ...(await getSystemVariables({
       ...data,
+      query,
+      histories,
       timezone
-    })
+    }))
   };
+
+  let mcpClientMemory = {} as Record<string, MCPClient>;
 
   // Init some props
   return runWorkflow({
     ...data,
+    query,
+    histories,
     timezone,
     externalProvider,
-    defaultSkipNodeQueue: data.lastInteractive?.skipNodeQueue || data.defaultSkipNodeQueue,
     variables: defaultVariables,
     workflowDispatchDeep: 0,
     usageId: newUsageId,
-    concatUsage
+    concatUsage,
+    mcpClientMemory,
+    cloneVariables
   }).finally(() => {
     if (streamCheckTimer) {
       clearInterval(streamCheckTimer);
     }
+
+    // Close mcpClient connections
+    Object.values(mcpClientMemory).forEach((client) => {
+      client.closeConnection();
+    });
   });
 }
 
 type RunWorkflowProps = ChatDispatchProps & {
   runtimeNodes: RuntimeNodeItemType[];
   runtimeEdges: RuntimeEdgeItemType[];
+  mcpClientMemory: Record<string, MCPClient>;
   defaultSkipNodeQueue?: WorkflowDebugResponse['skipNodeQueue'];
   concatUsage?: (points: number) => any;
 };
@@ -165,7 +198,6 @@ export const runWorkflow = async (data: RunWorkflowProps): Promise<DispatchFlowR
     res,
     runtimeNodes = [],
     runtimeEdges = [],
-    defaultSkipNodeQueue,
     histories = [],
     variables = {},
     externalProvider,
@@ -175,7 +207,9 @@ export const runWorkflow = async (data: RunWorkflowProps): Promise<DispatchFlowR
     responseAllData = true,
     usageId,
     concatUsage,
-    runningUserInfo: { teamId }
+    runningUserInfo: { teamId },
+    mcpClientMemory,
+    cloneVariables
   } = data;
 
   // Over max depth
@@ -195,11 +229,12 @@ export const runWorkflow = async (data: RunWorkflowProps): Promise<DispatchFlowR
       [DispatchNodeResponseKeyEnum.runTimes]: 1,
       [DispatchNodeResponseKeyEnum.assistantResponses]: [],
       [DispatchNodeResponseKeyEnum.toolResponses]: null,
-      newVariables: removeSystemVariable(
+      [DispatchNodeResponseKeyEnum.newVariables]: runtimeSystemVar2StoreType({
         variables,
-        externalProvider.externalWorkflowVariables,
-        data.chatConfig?.variables
-      ),
+        cloneVariables,
+        removeObj: externalProvider.externalWorkflowVariables,
+        userVariablesConfigs: data.chatConfig?.variables
+      }),
       durationSeconds: 0
     };
   }
@@ -210,7 +245,7 @@ export const runWorkflow = async (data: RunWorkflowProps): Promise<DispatchFlowR
 
   const isDebugMode = data.mode === 'debug';
 
-  /* 
+  /*
     工作流队列控制
     特点：
       1. 可以控制一个 team 下，并发 run 的节点数量。
@@ -276,6 +311,10 @@ export const runWorkflow = async (data: RunWorkflowProps): Promise<DispatchFlowR
         if (!node) return;
         this.addSkipNode(node, new Set(skippedNodeIdList));
       });
+    }
+
+    get connectionIsActive(): boolean {
+      return !res?.closed && !res?.errored;
     }
 
     // Add active node to queue (if already in the queue, it will not be added again)
@@ -437,6 +476,10 @@ export const runWorkflow = async (data: RunWorkflowProps): Promise<DispatchFlowR
 
       const dispatchData: ModuleDispatchProps<Record<string, any>> = {
         ...data,
+        mcpClientMemory,
+        lastInteractive: data.lastInteractive?.entryNodeIds?.includes(node.nodeId)
+          ? data.lastInteractive
+          : undefined,
         variables,
         histories,
         retainDatasetCite,
@@ -586,6 +629,23 @@ export const runWorkflow = async (data: RunWorkflowProps): Promise<DispatchFlowR
         }
       };
     }
+    private async checkTeamBlance(): Promise<NodeResponseCompleteType | undefined> {
+      try {
+        await checkTeamAIPoints(data.runningUserInfo.teamId);
+      } catch (error) {
+        // Next time you enter the system, you will still start from the current node(Current check team blance node).
+        if (error === TeamErrEnum.aiPointsNotEnough) {
+          return {
+            [DispatchNodeResponseKeyEnum.interactive]: {
+              type: 'paymentPause',
+              params: {
+                description: i18nT('chat:balance_not_enough_pause')
+              }
+            }
+          };
+        }
+      }
+    }
     /* Check node run/skip or wait */
     private async checkNodeCanRun(
       node: RuntimeNodeItemType,
@@ -618,6 +678,7 @@ export const runWorkflow = async (data: RunWorkflowProps): Promise<DispatchFlowR
           this.chatResponses.push(responseData);
         }
 
+        // Push usage in real time. Avoid a workflow usage a large number of points
         if (nodeDispatchUsages) {
           if (usageId) {
             pushChatItemUsage({
@@ -633,14 +694,13 @@ export const runWorkflow = async (data: RunWorkflowProps): Promise<DispatchFlowR
           this.chatNodeUsages = this.chatNodeUsages.concat(nodeDispatchUsages);
         }
 
-        if (toolResponses !== undefined && toolResponses !== null) {
-          if (Array.isArray(toolResponses) && toolResponses.length === 0) return;
-          if (
-            !Array.isArray(toolResponses) &&
+        if (
+          (toolResponses !== undefined && toolResponses !== null) ||
+          (Array.isArray(toolResponses) && toolResponses.length > 0) ||
+          (!Array.isArray(toolResponses) &&
             typeof toolResponses === 'object' &&
-            Object.keys(toolResponses).length === 0
-          )
-            return;
+            Object.keys(toolResponses).length > 0)
+        ) {
           this.toolRunResponse = toolResponses;
         }
 
@@ -694,6 +754,7 @@ export const runWorkflow = async (data: RunWorkflowProps): Promise<DispatchFlowR
 
         // Get next source edges and update status
         const skipHandleId = result[DispatchNodeResponseKeyEnum.skipHandleId] || [];
+
         const targetEdges = filterWorkflowEdges(runtimeEdges).filter(
           (item) => item.source === node.nodeId
         );
@@ -730,14 +791,15 @@ export const runWorkflow = async (data: RunWorkflowProps): Promise<DispatchFlowR
         };
       };
 
+      // Check queue status
       if (data.maxRunTimes <= 0) {
         addLog.error('Max run times is 0', {
           appId: data.runningAppInfo.id
         });
         return;
       }
-      if (res?.closed) {
-        addLog.warn('Request is closed', {
+      if (!this.connectionIsActive) {
+        addLog.warn('Request is closed/errored', {
           appId: data.runningAppInfo.id,
           nodeId: node.nodeId,
           nodeName: node.name
@@ -756,8 +818,18 @@ export const runWorkflow = async (data: RunWorkflowProps): Promise<DispatchFlowR
         node,
         runtimeEdges
       });
-      const nodeRunResult = await (() => {
+
+      const nodeRunResult = await (async () => {
         if (status === 'run') {
+          const blanceCheckResult = await this.checkTeamBlance();
+          if (blanceCheckResult) {
+            return {
+              node,
+              runStatus: 'pause' as const,
+              result: blanceCheckResult
+            };
+          }
+
           // All source edges status to waiting
           runtimeEdges.forEach((item) => {
             if (item.target === node.nodeId) {
@@ -836,10 +908,21 @@ export const runWorkflow = async (data: RunWorkflowProps): Promise<DispatchFlowR
           this.debugNextStepRunNodes = this.debugNextStepRunNodes.concat([nodeRunResult.node]);
         }
 
-        this.nodeInteractiveResponse = {
-          entryNodeIds: [nodeRunResult.node.nodeId],
-          interactiveResponse
-        };
+        // For the pause interactive response, there may be multiple nodes triggered at the same time, so multiple entry nodes need to be recorded.
+        // For other interactive nodes, only one will be triggered at the same time.
+        if (interactiveResponse.type === 'paymentPause') {
+          this.nodeInteractiveResponse = {
+            entryNodeIds: this.nodeInteractiveResponse?.entryNodeIds
+              ? this.nodeInteractiveResponse.entryNodeIds.concat(nodeRunResult.node.nodeId)
+              : [nodeRunResult.node.nodeId],
+            interactiveResponse
+          };
+        } else {
+          this.nodeInteractiveResponse = {
+            entryNodeIds: [nodeRunResult.node.nodeId],
+            interactiveResponse
+          };
+        }
         return;
       } else if (isDebugMode) {
         // Debug 模式下一步时候，会自己增加 activeNode
@@ -882,6 +965,7 @@ export const runWorkflow = async (data: RunWorkflowProps): Promise<DispatchFlowR
         entryNodeIds,
         memoryEdges: runtimeEdges.map((edge) => ({
           ...edge,
+          // 入口前面的边全部激活，保证下次进来一定能执行。
           status: entryNodeIds.includes(edge.target) ? 'active' : edge.status
         })),
         nodeOutputs,
@@ -937,7 +1021,7 @@ export const runWorkflow = async (data: RunWorkflowProps): Promise<DispatchFlowR
   const workflowQueue = await new Promise<WorkflowQueue>((resolve) => {
     const workflowQueue = new WorkflowQueue({
       resolve,
-      defaultSkipNodeQueue
+      defaultSkipNodeQueue: data.lastInteractive?.skipNodeQueue || data.defaultSkipNodeQueue
     });
 
     entryNodes.forEach((node) => {
@@ -968,12 +1052,6 @@ export const runWorkflow = async (data: RunWorkflowProps): Promise<DispatchFlowR
     });
   }
 
-  const encryptedNewVariables = removeSystemVariable(
-    variables,
-    externalProvider.externalWorkflowVariables,
-    data.chatConfig?.variables
-  );
-
   return {
     flowResponses: workflowQueue.chatResponses,
     flowUsages: workflowQueue.chatNodeUsages,
@@ -984,7 +1062,12 @@ export const runWorkflow = async (data: RunWorkflowProps): Promise<DispatchFlowR
       workflowQueue.chatAssistantResponse
     ),
     [DispatchNodeResponseKeyEnum.toolResponses]: workflowQueue.toolRunResponse,
-    [DispatchNodeResponseKeyEnum.newVariables]: encryptedNewVariables,
+    [DispatchNodeResponseKeyEnum.newVariables]: runtimeSystemVar2StoreType({
+      variables,
+      cloneVariables,
+      removeObj: externalProvider.externalWorkflowVariables,
+      userVariablesConfigs: data.chatConfig?.variables
+    }),
     [DispatchNodeResponseKeyEnum.memories]:
       Object.keys(workflowQueue.system_memories).length > 0
         ? workflowQueue.system_memories
@@ -994,7 +1077,7 @@ export const runWorkflow = async (data: RunWorkflowProps): Promise<DispatchFlowR
 };
 
 /* get system variable */
-const getSystemVariables = ({
+const getSystemVariables = async ({
   timezone,
   runningAppInfo,
   chatId,
@@ -1005,30 +1088,38 @@ const getSystemVariables = ({
   variables
 }: Props & {
   timezone: string;
-}): SystemVariablesType => {
+}): Promise<SystemVariablesType> => {
   // Get global variables(Label -> key; Key -> key)
   const variablesConfig = chatConfig?.variables || [];
 
-  const variablesMap = variablesConfig.reduce<Record<string, any>>((acc, item) => {
+  const variablesMap: Record<string, any> = {};
+  for await (const item of variablesConfig) {
     // For internal variables, ignore external input and use default value
     if (item.type === VariableInputEnum.password) {
       const val = variables[item.label] || variables[item.key] || item.defaultValue;
       const actualValue = anyValueDecrypt(val);
-      acc[item.key] = valueTypeFormat(actualValue, item.valueType);
+      variablesMap[item.key] = valueTypeFormat(actualValue, item.valueType);
     }
+    //  文件类型全局变量，签发成 string[] 格式
+    else if (item.type === VariableInputEnum.file) {
+      const vars = await presignVariablesFileUrls({
+        variables,
+        variableConfig: [item]
+      });
 
+      variablesMap[item.key] = vars?.[item.key]?.map((item: any) => item.url);
+    }
     // API
     else if (variables[item.label] !== undefined) {
-      acc[item.key] = valueTypeFormat(variables[item.label], item.valueType);
+      variablesMap[item.key] = valueTypeFormat(variables[item.label], item.valueType);
     }
     // Web
     else if (variables[item.key] !== undefined) {
-      acc[item.key] = valueTypeFormat(variables[item.key], item.valueType);
+      variablesMap[item.key] = valueTypeFormat(variables[item.key], item.valueType);
     } else {
-      acc[item.key] = valueTypeFormat(item.defaultValue, item.valueType);
+      variablesMap[item.key] = valueTypeFormat(item.defaultValue, item.valueType);
     }
-    return acc;
-  }, {});
+  }
 
   return {
     ...variablesMap,

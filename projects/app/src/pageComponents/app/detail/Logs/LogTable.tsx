@@ -149,13 +149,13 @@ const LogTable = ({
         filename: 'chat_logs.csv',
         body: {
           appId,
-          dateStart: dateRange.from || new Date(),
-          dateEnd: addDays(dateRange.to || new Date(), 1),
+          dateStart: dayjs(dateRange.from || new Date()).format(),
+          dateEnd: dayjs(addDays(dateRange.to || new Date(), 1)).format(),
           sources: isSelectAllSource ? undefined : chatSources,
           tmbIds: isSelectAllTmb ? undefined : selectTmbIds,
           chatSearch,
 
-          title: headerTitle + ',' + t('app:logs_keys_chatDetails'),
+          title: `${headerTitle},${t('app:logs_keys_chatDetails')}`,
           logKeys: enabledKeys,
           sourcesMap: Object.fromEntries(
             Object.entries(ChatSourceMap).map(([key, config]) => [

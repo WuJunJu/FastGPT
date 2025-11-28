@@ -135,7 +135,7 @@ const ChatItemContextProvider = ({
     ...defaultChatData
   });
 
-  const isPlugin = chatBoxData.app.type === AppTypeEnum.plugin;
+  const isPlugin = chatBoxData.app.type === AppTypeEnum.workflowTool;
 
   // plugin
   const [pluginRunTab, setPluginRunTab] = useState<PluginRunBoxTabEnum>(PluginRunBoxTabEnum.input);
@@ -149,7 +149,6 @@ const ChatItemContextProvider = ({
           variables[item.key] = item.defaultValue;
         }
       });
-
       const values = variablesForm.getValues();
       variablesForm.reset({
         ...values,

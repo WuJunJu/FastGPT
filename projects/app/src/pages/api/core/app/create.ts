@@ -2,8 +2,8 @@ import { NextAPI } from '@/service/middleware/entry';
 import { CommonErrEnum } from '@fastgpt/global/common/error/code/common';
 import type { ParentIdType } from '@fastgpt/global/common/parentFolder/type';
 import { parseParentIdInMongo } from '@fastgpt/global/common/parentFolder/utils';
-import type { AppTypeEnum } from '@fastgpt/global/core/app/constants';
-import { AppFolderTypeList } from '@fastgpt/global/core/app/constants';
+import { AppTypeEnum } from '@fastgpt/global/core/app/constants';
+import { AppFolderTypeList, ToolTypeList, AppTypeList } from '@fastgpt/global/core/app/constants';
 import type { AppSchema } from '@fastgpt/global/core/app/type';
 import { type ShortUrlParams } from '@fastgpt/global/support/marketing/type';
 import {
@@ -12,7 +12,6 @@ import {
   WritePermissionVal
 } from '@fastgpt/global/support/permission/constant';
 import { TeamAppCreatePermissionVal } from '@fastgpt/global/support/permission/user/constant';
-import { refreshSourceAvatar } from '@fastgpt/service/common/file/image/controller';
 import { pushTrack } from '@fastgpt/service/common/middle/tracks/utils';
 import { type ClientSession } from '@fastgpt/service/common/mongo';
 import { mongoSessionRun } from '@fastgpt/service/common/mongo/sessionRun';
@@ -29,6 +28,11 @@ import { getI18nAppType } from '@fastgpt/service/support/user/audit/util';
 import { MongoResourcePermission } from '@fastgpt/service/support/permission/schema';
 import { getMyModels } from '@fastgpt/service/support/permission/model/controller';
 import { removeUnauthModels } from '@fastgpt/global/core/workflow/utils';
+import { getS3AvatarSource } from '@fastgpt/service/common/s3/sources/avatar';
+import { isS3ObjectKey } from '@fastgpt/service/common/s3/utils';
+import { MongoAppTemplate } from '@fastgpt/service/core/app/templates/templateSchema';
+import { getNanoid } from '@fastgpt/global/common/string/tools';
+import path from 'node:path';
 
 export type CreateAppBody = {
   parentId?: ParentIdType;
@@ -39,11 +43,14 @@ export type CreateAppBody = {
   modules: AppSchema['modules'];
   edges?: AppSchema['edges'];
   chatConfig?: AppSchema['chatConfig'];
+
+  templateId?: string;
   utmParams?: ShortUrlParams;
 };
 
 async function handler(req: ApiRequestProps<CreateAppBody>) {
-  const { parentId, name, avatar, intro, type, modules, edges, chatConfig, utmParams } = req.body;
+  let { parentId, name, avatar, intro, type, modules, edges, chatConfig, templateId, utmParams } =
+    req.body;
 
   if (!name || !type || !Array.isArray(modules)) {
     return Promise.reject(CommonErrEnum.inheritPermissionError);
@@ -91,7 +98,8 @@ async function handler(req: ApiRequestProps<CreateAppBody>) {
     teamId,
     tmbId,
     userAvatar: tmb?.avatar,
-    username: tmb?.user?.username
+    username: tmb?.user?.username,
+    templateId
   });
 
   pushTrack.createApp({
@@ -122,12 +130,13 @@ export const onCreateApp = async ({
   pluginData,
   username,
   userAvatar,
+  templateId,
   session
 }: {
   parentId?: ParentIdType;
   name?: string;
   avatar?: string;
-  type?: AppTypeEnum;
+  type: AppTypeEnum;
   modules?: AppSchema['modules'];
   edges?: AppSchema['edges'];
   chatConfig?: AppSchema['chatConfig'];
@@ -137,14 +146,50 @@ export const onCreateApp = async ({
   pluginData?: AppSchema['pluginData'];
   username?: string;
   userAvatar?: string;
+  templateId?: string;
   session?: ClientSession;
 }) => {
+  if (parentId) {
+    const parentApp = await MongoApp.findById(parentId, 'type').lean();
+
+    if (ToolTypeList.includes(type) && parentApp?.type !== AppTypeEnum.toolFolder) {
+      return Promise.reject('tool type can only be created in tool folder');
+    }
+    if (AppTypeList.includes(type) && parentApp?.type !== AppTypeEnum.folder) {
+      return Promise.reject('agent type can only be created in agent folder');
+    }
+  }
+
   const create = async (session: ClientSession) => {
+    const _avatar = await (async () => {
+      if (!templateId) return avatar;
+
+      const template = await MongoAppTemplate.findOne({ templateId }, 'avatar').lean();
+      if (!template?.avatar) return avatar;
+
+      const s3AvatarSource = getS3AvatarSource();
+      if (!isS3ObjectKey(template.avatar?.slice(s3AvatarSource.prefix.length), 'avatar'))
+        return template.avatar;
+
+      const filename = (() => {
+        const last = template.avatar.split('/').pop()?.split('-')[1];
+        if (!last) return getNanoid(6).concat(path.extname(template.avatar));
+        return `${getNanoid(6)}-${last}`;
+      })();
+
+      return await s3AvatarSource.copyAvatar({
+        key: template.avatar,
+        teamId,
+        filename,
+        temporary: true
+      });
+    })();
+
     const [app] = await MongoApp.create(
       [
         {
           ...parseParentIdInMongo(parentId),
-          avatar,
+          avatar: _avatar,
           name,
           intro,
           teamId,
@@ -154,7 +199,8 @@ export const onCreateApp = async ({
           chatConfig,
           type,
           version: 'v2',
-          pluginData
+          pluginData,
+          templateId
         }
       ],
       { session, ordered: true }
@@ -189,6 +235,8 @@ export const onCreateApp = async ({
       resourceType: PerResourceTypeEnum.app
     });
 
+    await getS3AvatarSource().refreshAvatar(_avatar, undefined, session);
+
     (async () => {
       addAuditLog({
         tmbId,
@@ -200,8 +248,6 @@ export const onCreateApp = async ({
         }
       });
     })();
-
-    await refreshSourceAvatar(avatar, undefined, session);
 
     return appId;
   };

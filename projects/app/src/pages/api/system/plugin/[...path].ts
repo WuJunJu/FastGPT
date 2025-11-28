@@ -1,5 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { jsonRes } from '@fastgpt/service/common/response';
+import { S3Buckets } from '@fastgpt/service/common/s3/constants';
+import type { S3PublicBucket } from '@fastgpt/service/common/s3/buckets/public';
 import { request } from 'http';
 import { FastGPTPluginUrl } from '@fastgpt/service/common/system/constants';
 
@@ -28,8 +30,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       throw new Error('url is empty');
     }
 
-    const requestPath = `/imgs/${pathArr.join('/')}`;
     const useImageProxy = !!ImageProxyBaseUrl && pathArr[0] === 'middleware';
+
+    // 优先使用公开桶直链（插件 Logo 等静态资源）
+    const bucket = global.s3BucketMap?.[S3Buckets.public] as S3PublicBucket | undefined;
+    if (!useImageProxy && bucket) {
+      const baseUrl = `system/plugin/${pathArr.join('/')}`.split('.')[0];
+      const requestPath = bucket.createPublicUrl(`${baseUrl}/logo`);
+      return res.redirect(requestPath);
+    }
+
+    const requestPath = `/imgs/${pathArr.join('/')}`;
     const targetBaseUrl = useImageProxy ? ImageProxyBaseUrl : FastGPTPluginUrl;
 
     if (!targetBaseUrl) {
@@ -68,7 +79,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         // @ts-ignore
         res.setHeader(key, response.headers[key]);
       });
-      response.statusCode && res.writeHead(response.statusCode);
+      if (response.statusCode) {
+        res.writeHead(response.statusCode);
+      }
       response.pipe(res);
     });
 

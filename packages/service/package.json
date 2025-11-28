@@ -36,7 +36,7 @@
     "jsonpath-plus": "^10.3.0",
     "jsonwebtoken": "^9.0.2",
     "lodash": "^4.17.21",
-    "mammoth": "^1.6.0",
+    "mammoth": "^1.11.0",
     "minio": "^8.0.5",
     "mongoose": "^8.10.1",
     "multer": "2.0.2",
@@ -45,6 +45,7 @@
     "nextjs-cors": "^2.2.0",
     "node-cron": "^3.0.3",
     "node-xlsx": "^0.24.0",
+    "p-limit": "^7.2.0",
     "papaparse": "5.4.1",
     "pdfjs-dist": "4.10.38",
     "pg": "^8.10.0",
@@ -54,9 +55,11 @@
     "tiktoken": "1.0.17",
     "tunnel": "^0.0.6",
     "turndown": "^7.1.2",
-    "winston": "^3.17.0"
+    "winston": "^3.17.0",
+    "zod": "^4.1.12"
   },
   "devDependencies": {
+    "@types/async-retry": "^1.4.9",
     "@types/cookie": "^0.5.2",
     "@types/decompress": "^4.2.7",
     "@types/jsonwebtoken": "^9.0.3",

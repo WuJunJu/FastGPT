@@ -8,19 +8,32 @@ import {
 
 export enum AppTypeEnum {
   folder = 'folder',
+  toolFolder = 'toolFolder',
   simple = 'simple',
+  agent = 'agent',
   workflow = 'advanced',
-  plugin = 'plugin',
-  toolSet = 'toolSet', // 'mcp'
+  workflowTool = 'plugin',
+  mcpToolSet = 'toolSet', // 'mcp'
   httpToolSet = 'httpToolSet',
-  tool = 'tool',
   hidden = 'hidden',
 
   // deprecated
+  tool = 'tool',
   httpPlugin = 'httpPlugin'
 }
 
-export const AppFolderTypeList = [AppTypeEnum.folder, AppTypeEnum.httpPlugin];
+export const AppFolderTypeList = [
+  AppTypeEnum.folder,
+  AppTypeEnum.toolFolder,
+  AppTypeEnum.httpPlugin
+];
+
+export const ToolTypeList = [
+  AppTypeEnum.mcpToolSet,
+  AppTypeEnum.httpToolSet,
+  AppTypeEnum.workflowTool
+];
+export const AppTypeList = [AppTypeEnum.simple, AppTypeEnum.agent, AppTypeEnum.workflow];
 
 export const defaultTTSConfig: AppTTSConfigType = { type: 'web' };
 
@@ -51,6 +64,10 @@ export const defaultAppSelectFileConfig: AppFileSelectConfigType = {
   canSelectFile: false,
   canSelectImg: false,
   maxFiles: 10,
+  canSelectVideo: false,
+  canSelectAudio: false,
+  canSelectCustomFileExtension: false,
+  customFileExtensionList: [],
   autoInjectFileContent: true, // 默认自动注入（向后兼容）
   inlineFileMetadata: false // 默认传统模式（向后兼容）
 };
@@ -66,3 +83,45 @@ export enum AppTemplateTypeEnum {
   // special type
   contribute = 'contribute'
 }
+
+export const defaultFileExtensionTypes = {
+  canSelectFile: ['.pdf', '.docx', '.pptx', '.xlsx', '.txt', '.md', '.html', '.csv'],
+  canSelectImg: ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.svg'],
+  canSelectVideo: ['.mp4', '.mov', '.avi', '.mpeg', '.webm'],
+  canSelectAudio: ['.mp3', '.wav', '.ogg', '.m4a', '.amr', '.mpga'],
+  canSelectCustomFileExtension: []
+};
+export type FileExtensionKeyType = keyof typeof defaultFileExtensionTypes;
+export const getUploadFileType = ({
+  canSelectFile,
+  canSelectImg,
+  canSelectVideo,
+  canSelectAudio,
+  canSelectCustomFileExtension,
+  customFileExtensionList
+}: {
+  canSelectFile?: boolean;
+  canSelectImg?: boolean;
+  canSelectVideo?: boolean;
+  canSelectAudio?: boolean;
+  canSelectCustomFileExtension?: boolean;
+  customFileExtensionList?: string[];
+}) => {
+  const types: string[] = [];
+  if (canSelectFile) {
+    types.push(...defaultFileExtensionTypes.canSelectFile);
+  }
+  if (canSelectImg) {
+    types.push(...defaultFileExtensionTypes.canSelectImg);
+  }
+  if (canSelectVideo) {
+    types.push(...defaultFileExtensionTypes.canSelectVideo);
+  }
+  if (canSelectAudio) {
+    types.push(...defaultFileExtensionTypes.canSelectAudio);
+  }
+  if (canSelectCustomFileExtension && customFileExtensionList) {
+    types.push(...customFileExtensionList);
+  }
+  return types.join(', ');
+};
