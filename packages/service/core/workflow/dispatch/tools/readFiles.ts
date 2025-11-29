@@ -253,6 +253,8 @@ export const dispatchReadFiles = async (props: Props): Promise<Response> => {
         : '';
     const textWithError = [docText, imageDescriptions.text].filter(Boolean).join('\n******\n');
     const finalText = textWithError + errorText;
+    const docTextWithError = docText ? `${docText}${errorText}` : errorText;
+    const fileContentText = docTextWithError;
 
     return {
       data: {
@@ -269,7 +271,7 @@ export const dispatchReadFiles = async (props: Props): Promise<Response> => {
           .join('\n******\n')
       },
       [DispatchNodeResponseKeyEnum.toolResponses]: {
-        fileContent: finalText,
+        fileContent: fileContentText,
         imageDescriptions: imageDescriptions.descriptions
       }
     };
@@ -315,37 +317,40 @@ export const getFileContentFromLinks = async ({
   customPdfParse?: boolean;
   usageId?: string;
 }) => {
-  const parseUrlList = urls
-    // Remove invalid urls
-    .filter((url) => {
-      if (typeof url !== 'string') return false;
+  const parseUrlList = Array.from(
+    new Set(
+      urls
+        // Remove invalid urls
+        .filter((url) => {
+          if (typeof url !== 'string') return false;
 
-      // 检查相对路径
-      const validPrefixList = ['/', 'http', 'ws'];
-      if (validPrefixList.some((prefix) => url.startsWith(prefix))) {
-        return true;
-      }
+          // 检查相对路径
+          const validPrefixList = ['/', 'http', 'ws'];
+          if (validPrefixList.some((prefix) => url.startsWith(prefix))) {
+            return true;
+          }
 
-      return false;
-    })
-    // Just get the document type file
-    .filter((url) => parseUrlToFileType(url)?.type === 'file')
-    .map((url) => {
-      try {
-        // Check is system upload file
-        const parsedURL = new URL(url, 'http://localhost:3000');
-        if (requestOrigin && parsedURL.origin === requestOrigin) {
-          url = url.replace(requestOrigin, '');
-        }
+          return false;
+        })
+        // Just get the document type file
+        .filter((url) => parseUrlToFileType(url)?.type === 'file')
+        .map((url) => {
+          try {
+            // Check is system upload file
+            const parsedURL = new URL(url, 'http://localhost:3000');
+            if (requestOrigin && parsedURL.origin === requestOrigin) {
+              url = url.replace(requestOrigin, '');
+            }
 
-        return url;
-      } catch (error) {
-        addLog.warn(`Parse url error`, { error });
-        return '';
-      }
-    })
-    .filter(Boolean)
-    .slice(0, maxFiles);
+            return url;
+          } catch (error) {
+            addLog.warn(`Parse url error`, { error });
+            return '';
+          }
+        })
+        .filter(Boolean)
+    )
+  ).slice(0, maxFiles);
 
   const readFilesResult = await Promise.all(
     parseUrlList
@@ -495,22 +500,28 @@ const getImageDescriptions = async ({
   model?: string;
   maxImages: number;
 }) => {
-  const imageUrls = urls
-    .filter((url) => typeof url === 'string')
-    .map((url) => {
-      try {
-        const parsedURL = new URL(url, 'http://localhost:3000');
-        if (requestOrigin && parsedURL.origin === requestOrigin) {
-          return url.replace(requestOrigin, '');
-        }
-        return url;
-      } catch (error) {
-        return url;
-      }
-    })
-    .map((url) => parseUrlToFileType(url))
-    .filter((item) => item && item.type === ChatFileTypeEnum.image)
-    .slice(0, maxImages) as { url: string; name?: string }[];
+  const imageUrls = Array.from(
+    new Map(
+      urls
+        .filter((url) => typeof url === 'string')
+        .map((url) => {
+          try {
+            const parsedURL = new URL(url, 'http://localhost:3000');
+            if (requestOrigin && parsedURL.origin === requestOrigin) {
+              return url.replace(requestOrigin, '');
+            }
+            return url;
+          } catch (error) {
+            return url;
+          }
+        })
+        .map((url) => parseUrlToFileType(url))
+        .filter((item) => item && item.type === ChatFileTypeEnum.image)
+        .map((item) => [item!.url, { url: item!.url, name: item!.name }])
+    ).values()
+  )
+    .slice(0, maxImages)
+    .map((item) => ({ url: item.url, name: item.name })) as { url: string; name?: string }[];
 
   if (!model || imageUrls.length === 0) {
     return {
@@ -527,7 +538,7 @@ const getImageDescriptions = async ({
     };
   }
 
-  const descriptions: { url: string; description: string }[] = [];
+  const descriptions: { url: string; description: string; name?: string }[] = [];
 
   for (const image of imageUrls) {
     try {
@@ -543,6 +554,7 @@ const getImageDescriptions = async ({
         } catch (error) {
           descriptions.push({
             url: image.url,
+            name: image.name,
             description: getErrText(error, 'Image parse error')
           });
           continue;
@@ -577,11 +589,13 @@ const getImageDescriptions = async ({
 
       descriptions.push({
         url: image.url,
+        name: image.name,
         description: answerText || ''
       });
     } catch (error) {
       descriptions.push({
         url: image.url,
+        name: image.name,
         description: getErrText(error, 'Image parse error')
       });
     }
@@ -589,12 +603,18 @@ const getImageDescriptions = async ({
 
   const text = descriptions
     .map(
-      (item, index) => `Image ${index + 1}: ${item.url}\n<Content>\n${item.description}\n</Content>`
+      (item, index) =>
+        `Image ${index + 1}${item.name ? `: ${item.name}` : ''}\n<Content>\n${item.description}\n</Content>`
     )
     .join('\n******\n');
 
+  const sanitizedDescriptions = descriptions.map((item) => ({
+    name: item.name,
+    description: item.description
+  }));
+
   return {
-    descriptions,
+    descriptions: sanitizedDescriptions,
     text
   };
 };

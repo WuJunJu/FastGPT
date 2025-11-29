@@ -55,6 +55,15 @@ export const parseUrlToFileType = (url: string): UserChatItemFileItemType | unde
     };
   }
 
+  const safeDecode = (val?: string | null) => {
+    if (!val) return val;
+    try {
+      return decodeURIComponent(val);
+    } catch (error) {
+      return val;
+    }
+  };
+
   try {
     const parseUrl = new URL(url, 'http://localhost:3000');
 
@@ -64,13 +73,14 @@ export const parseUrlToFileType = (url: string): UserChatItemFileItemType | unde
       if (url.startsWith('chat/')) return url.split('/').pop()?.split('-')[1];
       return parseUrl.searchParams.get('filename') || parseUrl.pathname.split('/').pop();
     })();
-    const extension = filename?.split('.').pop()?.toLowerCase() || '';
+    const decodedFilename = safeDecode(filename);
+    const extension = decodedFilename?.split('.').pop()?.toLowerCase() || '';
 
     // If it's a document type, return as file, otherwise treat as image
     if (extension && documentFileType.includes(extension)) {
       return {
         type: ChatFileTypeEnum.file,
-        name: filename || 'null',
+        name: decodedFilename || 'null',
         url
       };
     }
@@ -78,7 +88,7 @@ export const parseUrlToFileType = (url: string): UserChatItemFileItemType | unde
     // Default to image type for non-document files
     return {
       type: ChatFileTypeEnum.image,
-      name: filename || 'null',
+      name: decodedFilename || 'null',
       url
     };
   } catch (error) {
