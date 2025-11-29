@@ -17,18 +17,39 @@ const devLog = (...args: any[]) => {
  */
 export function extractFileIdFromUrl(url: string): string {
   try {
+    // 优先从 token payload 解析
     const tokenMatch = url.match(/[?&]token=([^&]+)/);
-    if (!tokenMatch) {
-      devLog('[extractFileIdFromUrl] No token found in URL:', url.substring(0, 100));
-      return '';
+    if (tokenMatch) {
+      const token = tokenMatch[1];
+      const payload = JSON.parse(atob(token.split('.')[1]));
+      const fileIdFromToken = payload.fileId || '';
+      if (isValidFileId(fileIdFromToken)) {
+        devLog('[extractFileIdFromUrl] Extracted fileId from token:', fileIdFromToken);
+        return fileIdFromToken;
+      }
     }
 
-    const token = tokenMatch[1];
-    // 解码JWT payload（base64）
-    const payload = JSON.parse(atob(token.split('.')[1]));
-    const fileId = payload.fileId || '';
-    devLog('[extractFileIdFromUrl] Extracted fileId:', fileId, 'from token');
-    return fileId;
+    // 其次尝试 query 参数
+    const urlObj = new URL(url, 'http://localhost');
+    const fileIdFromQuery = urlObj.searchParams.get('fileId') || urlObj.searchParams.get('id');
+    if (fileIdFromQuery && isValidFileId(fileIdFromQuery)) {
+      devLog('[extractFileIdFromUrl] Extracted fileId from query:', fileIdFromQuery);
+      return fileIdFromQuery;
+    }
+
+    // 再尝试路径中提取 24 位 hex（兼容 chat/<fileId>-filename.ext）
+    const pathMatches = [...urlObj.pathname.matchAll(/[a-f0-9]{24}/gi)];
+    if (pathMatches.length > 0) {
+      // 某些路径包含多个 24 位 hex，通常文件 ID 在后一个位置，取最后一个更稳妥
+      const lastMatch = pathMatches[pathMatches.length - 1][0];
+      if (isValidFileId(lastMatch)) {
+        devLog('[extractFileIdFromUrl] Extracted fileId from path:', lastMatch);
+        return lastMatch;
+      }
+    }
+
+    devLog('[extractFileIdFromUrl] No valid fileId found in URL:', url.substring(0, 100));
+    return '';
   } catch (error) {
     // 错误日志保留，生产环境也需要
     console.error('[extractFileIdFromUrl] Error extracting fileId:', error);
@@ -70,6 +91,23 @@ export function checkFileTokenExpired(url: string): boolean {
 }
 
 /**
+ * 获取文件标识，优先 fileId，其次 key，再次 URL 路径
+ */
+const getFileIdentifier = (file: NonNullable<UserChatItemValueItemType['file']>): string => {
+  const idFromUrl = extractFileIdFromUrl(file.url);
+  if (idFromUrl) return idFromUrl;
+  if (file.key) return file.key;
+
+  try {
+    const urlObj = new URL(file.url, 'http://localhost');
+    const path = decodeURIComponent(urlObj.pathname.replace(/^\//, ''));
+    return path || '';
+  } catch {
+    return '';
+  }
+};
+
+/**
  * 格式化内联文件元数据（紧凑格式）
  * @param documentFiles 文档文件列表
  * @param imageFiles 图片文件列表
@@ -84,21 +122,35 @@ export function formatInlineFileMetadata(
   // 文档文件
   if (documentFiles.length === 1) {
     const file = documentFiles[0].file!;
-    const fileId = extractFileIdFromUrl(file.url);
-    parts.push(`[📎 File: ${file.name} (fileId: "${fileId}")]`);
+    const fileId = getFileIdentifier(file);
+    const fileName = file.name || 'Unnamed';
+    parts.push(`[File: ${fileName} (fileId: "${fileId}")]`);
   } else if (documentFiles.length > 1) {
-    parts.push(`[📎 ${documentFiles.length} Files attached:`);
+    parts.push(`[${documentFiles.length} Files attached:`);
     documentFiles.forEach((item, index) => {
       const file = item.file!;
-      const fileId = extractFileIdFromUrl(file.url);
-      parts.push(`  ${index + 1}. ${file.name} (fileId: "${fileId}")`);
+      const fileId = getFileIdentifier(file);
+      const fileName = file.name || 'Unnamed';
+      parts.push(`  ${index + 1}. ${fileName} (fileId: "${fileId}")`);
     });
     parts.push(']');
   }
 
-  // 图片文件（简化显示）
-  if (imageFiles.length > 0) {
-    parts.push(`[🖼️ ${imageFiles.length} image${imageFiles.length > 1 ? 's' : ''} attached]`);
+  // 图片文件
+  if (imageFiles.length === 1) {
+    const file = imageFiles[0].file!;
+    const fileId = getFileIdentifier(file);
+    const fileName = file.name || 'Unnamed';
+    parts.push(`[Image: ${fileName} (fileId: "${fileId}")]`);
+  } else if (imageFiles.length > 1) {
+    parts.push(`[${imageFiles.length} Images attached:`);
+    imageFiles.forEach((item, index) => {
+      const file = item.file!;
+      const fileId = getFileIdentifier(file);
+      const fileName = file.name || 'Unnamed';
+      parts.push(`  ${index + 1}. ${fileName} (fileId: "${fileId}")`);
+    });
+    parts.push(']');
   }
 
   return parts.join('\n');
@@ -115,7 +167,7 @@ export function formatTraditionalFileList(documentFiles: UserChatItemValueItemTy
   const fileList = documentFiles
     .map((item) => {
       const file = item.file!;
-      const fileId = extractFileIdFromUrl(file.url);
+      const fileId = getFileIdentifier(file);
       return `- fileId: "${fileId}", name: "${file.name || 'Unnamed'}"`;
     })
     .join('\n');

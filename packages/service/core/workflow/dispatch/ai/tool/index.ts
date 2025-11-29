@@ -237,13 +237,16 @@ export const dispatchRunTools = async (props: DispatchToolModuleProps): Promise<
     const contextAssistantResponses = filterToolResponseForContext
       ? filterToolResponseForContext(assistantResponses)
       : assistantResponses;
-    const toolFlowMemories = dispatchFlowResponse.reduce<Record<string, any>>((acc, item) => {
-      const memories = item[DispatchNodeResponseKeyEnum.memories];
-      if (memories) {
-        Object.assign(acc, memories);
-      }
-      return acc;
-    }, {});
+    const toolFlowMemories = toolDispatchFlowResponses.reduce<Record<string, any>>(
+      (acc, response) => {
+        const memories = response[DispatchNodeResponseKeyEnum.memories];
+        if (memories) {
+          Object.assign(acc, memories);
+        }
+        return acc;
+      },
+      {}
+    );
 
     return {
       data: {

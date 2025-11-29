@@ -49,3 +49,9 @@ run/
 
 # examples
 scripts/examples/
+
+# ppnpm
+*.pnpm-store*
+
+# plugin
+# modules/tool/packages/

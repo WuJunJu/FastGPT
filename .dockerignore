@@ -11,3 +11,4 @@ yalc.lock
 testApi/
 *.local.*
 *.local
+.pnpm-store*

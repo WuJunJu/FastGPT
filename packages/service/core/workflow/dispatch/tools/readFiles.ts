@@ -8,7 +8,8 @@ import { serverRequestBaseUrl } from '../../../../common/api/serverRequest';
 import { getErrText } from '@fastgpt/global/common/error/utils';
 import { detectFileEncoding, parseUrlToFileType } from '@fastgpt/global/common/file/tools';
 import { readS3FileContentByBuffer } from '../../../../common/file/read/utils';
-import { ChatRoleEnum } from '@fastgpt/global/core/chat/constants';
+import { ChatFileTypeEnum, ChatRoleEnum } from '@fastgpt/global/core/chat/constants';
+import { ChatCompletionRequestMessageRoleEnum } from '@fastgpt/global/core/ai/constants';
 import { type ChatItemType, type UserChatItemValueItemType } from '@fastgpt/global/core/chat/type';
 import { addLog } from '../../../../common/system/log';
 import { addRawTextBuffer, getRawTextBuffer } from '../../../../common/buffer/rawText/controller';
@@ -23,6 +24,9 @@ import { S3Buckets } from '../../../../common/s3/constants';
 import { S3Sources } from '../../../../common/s3/type';
 import { extractFileIdFromUrl, isValidFileId, checkFileTokenExpired } from '../ai/utils';
 import { chatValue2RuntimePrompt } from '@fastgpt/global/core/chat/adapt';
+import { createLLMResponse } from '../../../ai/llm/request';
+import { getLLMModel } from '../../../ai/model';
+import { getImageBase64 } from '../../../../common/file/image/utils';
 
 /**
  * 开发模式调试日志（生产环境不输出）
@@ -35,6 +39,9 @@ const devLog = (...args: any[]) => {
 
 type Props = ModuleDispatchProps<{
   [NodeInputKeyEnum.fileUrlList]: string[];
+  [NodeInputKeyEnum.enableDocParse]?: boolean;
+  [NodeInputKeyEnum.enableImageParse]?: boolean;
+  [NodeInputKeyEnum.imageModel]?: string;
 }>;
 type Response = DispatchNodeResultType<{
   [NodeOutputKeyEnum.text]: string;
@@ -70,7 +77,7 @@ export const dispatchReadFiles = async (props: Props): Promise<Response> => {
     chatConfig,
     query,
     node: { version },
-    params: { fileUrlList = [] },
+    params: { fileUrlList = [], enableDocParse = true, enableImageParse = false, imageModel },
     usageId
   } = props;
   const maxFiles = chatConfig?.fileSelectConfig?.maxFiles || 20;
@@ -105,7 +112,7 @@ export const dispatchReadFiles = async (props: Props): Promise<Response> => {
     histories.forEach((item) => {
       if (item.obj === ChatRoleEnum.Human && item.value) {
         item.value.forEach((valueItem) => {
-          if (valueItem.type === 'file' && valueItem.file?.type === 'file') {
+          if (valueItem.type === 'file' && valueItem.file?.type) {
             const fileId = extractFileIdFromUrl(valueItem.file.url);
             if (fileId) {
               devLog(
@@ -164,27 +171,41 @@ export const dispatchReadFiles = async (props: Props): Promise<Response> => {
     devLog('[ReadFiles] Resolved URLs count:', resolvedUrls.length);
     devLog('[ReadFiles] File errors count:', fileErrors.length);
 
-    const { text, readFilesResult } = await getFileContentFromLinks({
-      // Concat fileUrlList and filesFromHistories; remove not supported files
-      urls: [...resolvedUrls, ...filesFromHistories],
-      requestOrigin,
-      maxFiles,
-      teamId,
-      tmbId,
-      customPdfParse,
-      usageId
-    });
+    const { text: docText, readFilesResult } = enableDocParse
+      ? await getFileContentFromLinks({
+          // Concat fileUrlList and filesFromHistories; remove not supported files
+          urls: [...resolvedUrls, ...filesFromHistories],
+          requestOrigin,
+          maxFiles,
+          teamId,
+          tmbId,
+          customPdfParse,
+          usageId
+        })
+      : { text: '', readFilesResult: [] };
+
+    const imageDescriptions = enableImageParse
+      ? await getImageDescriptions({
+          urls: [...resolvedUrls, ...filesFromHistories],
+          requestOrigin,
+          teamId,
+          tmbId,
+          model: imageModel,
+          maxImages: maxFiles
+        })
+      : { text: '', descriptions: [] };
 
     // 如果有文件错误，附加到输出文本
     const errorText =
       fileErrors.length > 0
         ? `\n\n--- File Access Errors ---\n${fileErrors.join('\n')}\n--- End of Errors ---`
         : '';
-    const textWithError = text + errorText;
+    const textWithError = [docText, imageDescriptions.text].filter(Boolean).join('\n******\n');
+    const finalText = textWithError + errorText;
 
     return {
       data: {
-        [NodeOutputKeyEnum.text]: textWithError,
+        [NodeOutputKeyEnum.text]: finalText,
         [NodeOutputKeyEnum.rawResponse]: readFilesResult
       },
       [DispatchNodeResponseKeyEnum.nodeResponse]: {
@@ -197,7 +218,8 @@ export const dispatchReadFiles = async (props: Props): Promise<Response> => {
           .join('\n******\n')
       },
       [DispatchNodeResponseKeyEnum.toolResponses]: {
-        fileContent: textWithError
+        fileContent: finalText,
+        imageDescriptions: imageDescriptions.descriptions
       }
     };
   } catch (error) {
@@ -392,5 +414,124 @@ export const getFileContentFromLinks = async ({
   return {
     text,
     readFilesResult
+  };
+};
+
+const getImageDescriptions = async ({
+  urls,
+  requestOrigin,
+  teamId,
+  tmbId,
+  model,
+  maxImages
+}: {
+  urls: string[];
+  requestOrigin?: string;
+  teamId: string;
+  tmbId: string;
+  model?: string;
+  maxImages: number;
+}) => {
+  const imageUrls = urls
+    .filter((url) => typeof url === 'string')
+    .map((url) => {
+      try {
+        const parsedURL = new URL(url, 'http://localhost:3000');
+        if (requestOrigin && parsedURL.origin === requestOrigin) {
+          return url.replace(requestOrigin, '');
+        }
+        return url;
+      } catch (error) {
+        return url;
+      }
+    })
+    .map((url) => parseUrlToFileType(url))
+    .filter((item) => item && item.type === ChatFileTypeEnum.image)
+    .slice(0, maxImages) as { url: string; name?: string }[];
+
+  if (!model || imageUrls.length === 0) {
+    return {
+      descriptions: [],
+      text: imageUrls.length === 0 ? '' : 'Image parsing skipped (model not set).'
+    };
+  }
+
+  const modelConstants = getLLMModel(model);
+  if (!modelConstants || !modelConstants.vision) {
+    return {
+      descriptions: [],
+      text: 'Image parsing skipped (model does not support vision).'
+    };
+  }
+
+  const descriptions: { url: string; description: string }[] = [];
+
+  for (const image of imageUrls) {
+    try {
+      let visionUrl = image.url;
+      // Always convert to base64 for vision model to avoid内网/签名URL不可访问的问题
+      if (!visionUrl.startsWith('data:image/')) {
+        try {
+          const absUrl = visionUrl.startsWith('http')
+            ? visionUrl
+            : `${requestOrigin || ''}${visionUrl}`;
+          const { completeBase64 } = await getImageBase64(absUrl);
+          visionUrl = completeBase64;
+        } catch (error) {
+          descriptions.push({
+            url: image.url,
+            description: getErrText(error, 'Image parse error')
+          });
+          continue;
+        }
+      }
+
+      const { answerText } = await createLLMResponse({
+        body: {
+          model: modelConstants.model,
+          messages: [
+            {
+              role: ChatCompletionRequestMessageRoleEnum.User,
+              content: [
+                {
+                  type: 'image_url',
+                  image_url: {
+                    url: visionUrl
+                  }
+                },
+                {
+                  type: 'text',
+                  text: '请简要描述这张图片的主要内容，使用中文输出。'
+                }
+              ]
+            }
+          ],
+          stream: false,
+          useVision: true,
+          requestOrigin
+        }
+      });
+
+      descriptions.push({
+        url: image.url,
+        description: answerText || ''
+      });
+    } catch (error) {
+      descriptions.push({
+        url: image.url,
+        description: getErrText(error, 'Image parse error')
+      });
+    }
+  }
+
+  const text = descriptions
+    .map(
+      (item, index) => `Image ${index + 1}: ${item.url}\n<Content>\n${item.description}\n</Content>`
+    )
+    .join('\n******\n');
+
+  return {
+    descriptions,
+    text
   };
 };

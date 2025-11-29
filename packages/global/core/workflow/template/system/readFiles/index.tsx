@@ -36,6 +36,30 @@ export const ReadFilesNode: FlowNodeTemplateType = {
         'List of fileIds or URLs to read. Use fileId (24-character hex string) for files uploaded in this conversation, or full URL for external files. Example: ["6753f63fd6e15a77765ca448", "6753f640d6e15a77765ca449"]',
       required: true,
       value: []
+    },
+    {
+      key: NodeInputKeyEnum.enableDocParse,
+      renderTypeList: [FlowNodeInputTypeEnum.switch],
+      valueType: WorkflowIOValueTypeEnum.boolean,
+      label: i18nT('app:workflow.read_files_doc_switch') || 'Enable doc parsing',
+      value: true
+    },
+    {
+      key: NodeInputKeyEnum.enableImageParse,
+      renderTypeList: [FlowNodeInputTypeEnum.switch],
+      valueType: WorkflowIOValueTypeEnum.boolean,
+      label: i18nT('app:workflow.read_files_image_switch') || 'Enable image parsing',
+      value: false
+    },
+    {
+      key: NodeInputKeyEnum.imageModel,
+      renderTypeList: [FlowNodeInputTypeEnum.selectLLMModel],
+      valueType: WorkflowIOValueTypeEnum.string,
+      label: i18nT('app:workflow.read_files_image_model') || 'Vision model for images',
+      description:
+        i18nT('app:workflow.read_files_image_model_desc') ||
+        'Select a multimodal model to describe images.',
+      required: false
     }
   ],
   outputs: [

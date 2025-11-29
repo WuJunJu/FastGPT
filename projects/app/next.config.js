@@ -7,10 +7,12 @@ const withBundleAnalyzer = require('@next/bundle-analyzer')({
 });
 
 const isDev = process.env.NODE_ENV === 'development';
+const envBasePath = process.env.NEXT_PUBLIC_BASE_URL;
+const basePath = envBasePath && envBasePath.startsWith('/') ? envBasePath : undefined;
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  basePath: process.env.NEXT_PUBLIC_BASE_URL,
+  basePath,
   i18n,
   output: 'standalone',
   reactStrictMode: isDev ? false : true,
@@ -146,4 +148,3 @@ const nextConfig = {
 };
 
 module.exports = nextConfig;
-

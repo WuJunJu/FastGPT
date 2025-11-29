@@ -27,6 +27,7 @@ WORKDIR /app
 
 ARG proxy
 ARG base_url
+ARG NEXT_DISABLE_ESLINT=1
 
 # copy common node_modules and one project node_modules
 COPY package.json pnpm-workspace.yaml .npmrc tsconfig.json ./
@@ -41,7 +42,8 @@ RUN apk add --no-cache libc6-compat && npm install -g pnpm@9.4.0
 
 ENV NODE_OPTIONS="--max-old-space-size=4096"
 ENV NEXT_PUBLIC_BASE_URL=$base_url
-RUN pnpm --filter=app build
+ENV NEXT_DISABLE_ESLINT=$NEXT_DISABLE_ESLINT
+RUN pnpm --filter=app run build:workers && pnpm --filter=app exec next build --no-lint
 
 # --------- runner -----------
 FROM node:20.14.0-alpine AS runner

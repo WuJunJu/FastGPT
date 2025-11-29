@@ -227,6 +227,9 @@ export enum NodeInputKeyEnum {
 
   // read files
   fileUrlList = 'fileUrlList',
+  enableDocParse = 'enableDocParse',
+  enableImageParse = 'enableImageParse',
+  imageModel = 'imageModel',
 
   // user select
   userSelectOptions = 'userSelectOptions',
