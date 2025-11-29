@@ -176,7 +176,7 @@ export const useFileUpload = (props: UseFileUploadOptions) => {
           const fileIndex = fileList.findIndex((item) => item.id === file.id)!;
 
           // Get Upload Post Presigned URL
-          const { url, fields, maxSize } = await getUploadChatFilePresignedUrl({
+          const { url, fields, maxSize, fileId } = await getUploadChatFilePresignedUrl({
             filename: copyFile.rawFile.name,
             appId,
             chatId,
@@ -201,6 +201,7 @@ export const useFileUpload = (props: UseFileUploadOptions) => {
 
           const previewUrl = await getPresignedChatFileGetUrl({
             key: fields.key,
+            fileId,
             appId,
             outLinkAuthData
           });
@@ -208,6 +209,7 @@ export const useFileUpload = (props: UseFileUploadOptions) => {
           // Update file url and key
           copyFile.url = previewUrl;
           copyFile.key = fields.key;
+          copyFile.fileId = fileId;
           updateFiles(fileIndex, copyFile);
         } catch (error) {
           errorFileIndex.push(fileList.findIndex((item) => item.id === file.id)!);

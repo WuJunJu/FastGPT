@@ -32,9 +32,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           })()
         );
 
+        const filename =
+          (req.query.filename as string | undefined)?.toString() || metadata.filename || 'file';
+        const encodedFilename = encodeURIComponent(filename);
+
         res.setHeader('Content-Type', metadata.contentType);
         res.setHeader('Cache-Control', 'public, max-age=31536000');
         res.setHeader('Content-Length', metadata.contentLength);
+        res.setHeader(
+          'Content-Disposition',
+          `attachment; filename="${encodedFilename}"; filename*=UTF-8''${encodedFilename}`
+        );
 
         stream.pipe(res);
 

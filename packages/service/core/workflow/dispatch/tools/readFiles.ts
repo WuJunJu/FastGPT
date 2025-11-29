@@ -90,6 +90,44 @@ export const dispatchReadFiles = async (props: Props): Promise<Response> => {
     // === 构建fileId映射表 ===
     const fileIdMap = new Map<string, { url: string; name: string }>();
 
+    const addFileToMap = ({
+      fileId,
+      url,
+      name,
+      extraIds = []
+    }: {
+      fileId?: string;
+      url: string;
+      name: string;
+      extraIds?: (string | undefined)[];
+    }) => {
+      const ids = new Set<string>();
+      [fileId, ...extraIds].forEach((id) => {
+        if (id) {
+          ids.add(id);
+          ids.add(id.replace(/^\/+/, ''));
+          ids.add(id.replace(new RegExp(`^${S3Buckets.private}/`), ''));
+        }
+      });
+
+      try {
+        const urlObj = new URL(url, 'http://localhost');
+        const pathname = decodeURIComponent(urlObj.pathname.replace(/^\/+/, ''));
+        if (pathname) {
+          ids.add(pathname);
+          ids.add(pathname.replace(new RegExp(`^${S3Buckets.private}/`), ''));
+        }
+      } catch (error) {
+        devLog('[ReadFiles] parse url for map failed', error);
+      }
+
+      ids.forEach((id) => {
+        if (id) {
+          fileIdMap.set(id, { url, name });
+        }
+      });
+    };
+
     // 从当前query中提取文件（使用正确的解析方法）
     if (query) {
       const { files: currentFiles } = chatValue2RuntimePrompt(query);
@@ -99,7 +137,15 @@ export const dispatchReadFiles = async (props: Props): Promise<Response> => {
           const fileId = extractFileIdFromUrl(file.url);
           devLog('[ReadFiles] Extracted fileId from current query:', fileId, 'name:', file.name);
           if (fileId) {
-            fileIdMap.set(fileId, {
+            addFileToMap({
+              fileId,
+              url: file.url,
+              name: file.name || 'Unnamed',
+              extraIds: [file.key]
+            });
+          } else if (file.key) {
+            addFileToMap({
+              fileId: file.key,
               url: file.url,
               name: file.name || 'Unnamed'
             });
@@ -121,9 +167,11 @@ export const dispatchReadFiles = async (props: Props): Promise<Response> => {
                 'name:',
                 valueItem.file.name
               );
-              fileIdMap.set(fileId, {
+              addFileToMap({
+                fileId,
                 url: valueItem.file.url,
-                name: valueItem.file.name || 'Unnamed'
+                name: valueItem.file.name || 'Unnamed',
+                extraIds: [valueItem.file.key]
               });
             }
           }
@@ -141,25 +189,28 @@ export const dispatchReadFiles = async (props: Props): Promise<Response> => {
     devLog('[ReadFiles] Received fileUrlList:', fileUrlList);
 
     for (const item of fileUrlList) {
+      const mapKey = item.replace(/^\/+/, '');
+      const fileInfo = fileIdMap.get(mapKey);
+
       // 检查是否为fileId（24位十六进制）
-      if (isValidFileId(item)) {
+      if (isValidFileId(item) || fileInfo) {
         devLog('[ReadFiles] Valid fileId detected:', item);
-        const fileInfo = fileIdMap.get(item);
-        if (fileInfo) {
-          devLog('[ReadFiles] Found file in map:', fileInfo.name);
-          // 检查文件是否过期
-          if (checkFileTokenExpired(fileInfo.url)) {
-            devLog('[ReadFiles] File is expired:', item);
-            fileErrors.push(
-              `File expired: "${fileInfo.name}" (fileId: ${item}). Please re-upload the file.`
-            );
-          } else {
-            devLog('[ReadFiles] File is valid, adding to resolvedUrls');
-            resolvedUrls.push(fileInfo.url);
-          }
-        } else {
+        if (!fileInfo) {
           devLog('[ReadFiles] File NOT found in map for fileId:', item);
           fileErrors.push(`File not found: fileId "${item}". It may not be in this conversation.`);
+          continue;
+        }
+
+        devLog('[ReadFiles] Found file in map:', fileInfo.name);
+        // 检查文件是否过期
+        if (checkFileTokenExpired(fileInfo.url)) {
+          devLog('[ReadFiles] File is expired:', item);
+          fileErrors.push(
+            `File expired: "${fileInfo.name}" (fileId: ${item}). Please re-upload the file.`
+          );
+        } else {
+          devLog('[ReadFiles] File is valid, adding to resolvedUrls');
+          resolvedUrls.push(fileInfo.url);
         }
       } else {
         devLog('[ReadFiles] Not a valid fileId, treating as URL:', item);
@@ -329,6 +380,18 @@ export const getFileContentFromLinks = async ({
 
           // Get file name
           const { filename, extension, imageParsePrefix } = (() => {
+            const filenameFromQuery = urlObj.searchParams.get('filename');
+            if (filenameFromQuery) {
+              const ext = path.extname(filenameFromQuery).replace('.', '');
+              return {
+                filename: filenameFromQuery,
+                extension: ext,
+                imageParsePrefix: isChatExternalUrl
+                  ? getFileS3Key.temp({ teamId, filename: filenameFromQuery }).fileParsedPrefix
+                  : ''
+              };
+            }
+
             const contentDisposition = response.headers['content-disposition'];
             if (contentDisposition) {
               const filenameRegex = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/;

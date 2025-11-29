@@ -3,7 +3,7 @@
   "version": "4.14.3",
   "private": false,
   "scripts": {
-    "dev": "npm run build:workers && next dev",
+    "dev": "npm run build:workers && next dev --hostname 0.0.0.0",
     "build": "npm run build:workers && next build",
     "start": "next start",
     "lint": "next lint",
@@ -35,6 +35,8 @@
     "echarts": "5.4.1",
     "echarts-gl": "2.0.9",
     "esbuild": "^0.25.11",
+    "formidable": "^2.1.2",
+    "busboy": "^1.6.0",
     "framer-motion": "9.1.7",
     "hyperdown": "^2.4.29",
     "i18next": "23.16.8",

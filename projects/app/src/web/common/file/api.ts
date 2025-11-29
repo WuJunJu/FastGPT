@@ -35,6 +35,7 @@ export const getUploadChatFilePresignedUrl = (params: {
 export const getPresignedChatFileGetUrl = (params: {
   key: string;
   appId: string;
+  fileId?: string;
   outLinkAuthData?: OutLinkChatAuthProps;
 }) => {
   return POST<string>('/core/chat/presignChatFileGetUrl', params);

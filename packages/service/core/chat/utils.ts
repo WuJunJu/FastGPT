@@ -16,6 +16,7 @@ export const addPreviewUrlToChatItems = async (
       if (value.type === ChatItemValueTypeEnum.file && value.file && value.file.key) {
         value.file.url = await s3ChatSource.createGetChatFileURL({
           key: value.file.key,
+          fileId: (value.file as any)?.fileId || (value.file as any)?.id,
           external: true
         });
       }
@@ -41,6 +42,7 @@ export const addPreviewUrlToChatItems = async (
           if (!file.key) continue;
           const url = await getS3ChatSource().createGetChatFileURL({
             key: file.key,
+            fileId: (file as any)?.fileId || (file as any)?.id,
             external: true
           });
           file.url = url;
@@ -87,6 +89,7 @@ export const presignVariablesFileUrls = async ({
 
               const url = await getS3ChatSource().createGetChatFileURL({
                 key: item.key,
+                fileId: (item as any)?.fileId || (item as any)?.id,
                 external: true
               });
 

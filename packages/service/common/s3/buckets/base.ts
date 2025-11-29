@@ -227,22 +227,26 @@ export class S3BaseBucket {
   async createExternalUrl(params: createPreviewUrlParams) {
     const parsed = CreateGetPresignedUrlParamsSchema.parse(params);
 
-    const { key, expiredHours } = parsed;
+    const { key, expiredHours, filename } = parsed;
+    const downloadName = filename || path.basename(key);
+    const encodedName = encodeURIComponent(downloadName);
     const expires = expiredHours ? expiredHours * 60 * 60 : 30 * 60; // expires 的单位是秒 默认 30 分钟
 
     return await this.externalClient.presignedGetObject(this.name, key, expires, {
-      'Content-Disposition': `attachment; filename="${path.basename(key)}"`
+      'Content-Disposition': `attachment; filename="${encodedName}"; filename*=UTF-8''${encodedName}`
     });
   }
 
   async createPreviewUrl(params: createPreviewUrlParams) {
     const parsed = CreateGetPresignedUrlParamsSchema.parse(params);
 
-    const { key, expiredHours } = parsed;
+    const { key, expiredHours, filename } = parsed;
+    const downloadName = filename || path.basename(key);
+    const encodedName = encodeURIComponent(downloadName);
     const expires = expiredHours ? expiredHours * 60 * 60 : 30 * 60; // expires 的单位是秒 默认 30 分钟
 
     return await this.client.presignedGetObject(this.name, key, expires, {
-      'Content-Disposition': `attachment; filename="${path.basename(key)}"`
+      'Content-Disposition': `attachment; filename="${encodedName}"; filename*=UTF-8''${encodedName}`
     });
   }
 }

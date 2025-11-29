@@ -57,23 +57,36 @@ export function truncateFilename(
  * @param expiredTime
  * @returns
  */
-export function jwtSignS3ObjectKey(objectKey: string, expiredTime: Date) {
+export function jwtSignS3ObjectKey(
+  objectKey: string,
+  expiredTime: Date,
+  extra?: {
+    fileId?: string;
+  }
+) {
   const secret = process.env.FILE_TOKEN_KEY as string;
   const expiresIn = differenceInSeconds(expiredTime, new Date());
-  const token = jwt.sign({ objectKey }, secret, { expiresIn });
+  const token = jwt.sign(
+    {
+      objectKey,
+      ...(extra?.fileId ? { fileId: extra.fileId } : {})
+    },
+    secret,
+    { expiresIn }
+  );
 
   return `${EndpointUrl}/api/system/file/${token}`;
 }
 
 export function jwtVerifyS3ObjectKey(token: string) {
   const secret = process.env.FILE_TOKEN_KEY as string;
-  return new Promise<{ objectKey: string }>((resolve, reject) => {
+  return new Promise<{ objectKey: string; fileId?: string }>((resolve, reject) => {
     jwt.verify(token, secret, (err, payload) => {
       if (err || !payload || !(payload as jwt.JwtPayload).objectKey) {
         reject(ERROR_ENUM.unAuthFile);
       }
 
-      resolve(payload as { objectKey: string });
+      resolve(payload as { objectKey: string; fileId?: string });
     });
   });
 }

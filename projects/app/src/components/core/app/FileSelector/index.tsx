@@ -138,6 +138,7 @@ const FileSelector = ({
             });
             const previewUrl = await getPresignedChatFileGetUrl({
               key: fields.key,
+              fileId: res.fileId,
               appId,
               outLinkAuthData
             });
@@ -147,6 +148,7 @@ const FileSelector = ({
               if (item.id === file.id) {
                 item.url = previewUrl;
                 item.key = fields.key;
+                item.fileId = res.fileId;
                 item.process = 100;
               }
             });

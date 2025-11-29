@@ -55,3 +55,6 @@ scripts/examples/
 
 # plugin
 # modules/tool/packages/
+
+# node
+node-compile-cache/

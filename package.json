@@ -18,6 +18,9 @@
     "test": "vitest run",
     "test:workflow": "vitest run workflow"
   },
+  "dependencies": {
+    "formidable": "^2.1.2"
+  },
   "devDependencies": {
     "@chakra-ui/cli": "^2.4.1",
     "@typescript-eslint/eslint-plugin": "^6.21.0",

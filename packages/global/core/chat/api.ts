@@ -7,6 +7,7 @@ export const PresignChatFileGetUrlSchema = z
   .object({
     key: z.string().min(1),
     appId: ObjectIdSchema,
+    fileId: z.string().length(24).optional(),
     outLinkAuthData: OutLinkChatAuthSchema.optional()
   })
   .meta({
@@ -14,6 +15,7 @@ export const PresignChatFileGetUrlSchema = z
     example: {
       key: '1234567890',
       appId: '1234567890',
+      fileId: '1234567890abcdef12345678',
       outLinkAuthData: {
         shareId: '1234567890',
         outLinkUid: '1234567890'

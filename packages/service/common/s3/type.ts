@@ -47,13 +47,16 @@ export type CreatePostPresignedUrlOptions = z.infer<typeof CreatePostPresignedUr
 export const CreatePostPresignedUrlResultSchema = z.object({
   url: z.string().nonempty(),
   fields: z.record(z.string(), z.string()),
-  maxSize: z.number().positive().optional() // bytes
+  maxSize: z.number().positive().optional(), // bytes
+  fileId: z.string().length(24).optional()
 });
 export type CreatePostPresignedUrlResult = z.infer<typeof CreatePostPresignedUrlResultSchema>;
 
 export const CreateGetPresignedUrlParamsSchema = z.object({
   key: z.string().nonempty(),
-  expiredHours: z.number().positive().optional()
+  expiredHours: z.number().positive().optional(),
+  filename: z.string().min(1).optional(),
+  fileId: z.string().length(24).optional()
 });
 export type createPreviewUrlParams = z.infer<typeof CreateGetPresignedUrlParamsSchema>;
 

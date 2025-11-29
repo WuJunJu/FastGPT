@@ -16,16 +16,43 @@ const devLog = (...args: any[]) => {
  * @returns fileId（24位十六进制字符串）
  */
 export function extractFileIdFromUrl(url: string): string {
+  const getTokenFromUrl = (target: string) => {
+    const queryToken = target.match(/[?&]token=([^&]+)/)?.[1];
+    if (queryToken) return queryToken;
+    const pathToken = target.match(/\/api\/system\/file\/([^/?]+)/)?.[1];
+    if (pathToken) return pathToken;
+    return '';
+  };
+
+  const parseJwtPayload = (token: string) => {
+    try {
+      const base64 = token.split('.')[1];
+      if (!base64) return null;
+      const normalized = base64
+        .replace(/-/g, '+')
+        .replace(/_/g, '/')
+        .padEnd(Math.ceil(base64.length / 4) * 4, '=');
+      const payloadStr = Buffer.from(normalized, 'base64').toString('utf-8');
+      return JSON.parse(payloadStr);
+    } catch (error) {
+      devLog('[extractFileIdFromUrl] Parse token payload failed', error);
+      return null;
+    }
+  };
+
   try {
-    // 优先从 token payload 解析
-    const tokenMatch = url.match(/[?&]token=([^&]+)/);
-    if (tokenMatch) {
-      const token = tokenMatch[1];
-      const payload = JSON.parse(atob(token.split('.')[1]));
-      const fileIdFromToken = payload.fileId || '';
+    // 优先从 token payload 解析（支持 query 或路径形式）
+    const token = getTokenFromUrl(url);
+    if (token) {
+      const payload = parseJwtPayload(token);
+      const fileIdFromToken = payload?.fileId || payload?.objectKey || '';
       if (isValidFileId(fileIdFromToken)) {
         devLog('[extractFileIdFromUrl] Extracted fileId from token:', fileIdFromToken);
         return fileIdFromToken;
+      }
+      if (payload?.objectKey) {
+        devLog('[extractFileIdFromUrl] Use objectKey as identifier:', payload.objectKey);
+        return payload.objectKey;
       }
     }
 
@@ -37,18 +64,17 @@ export function extractFileIdFromUrl(url: string): string {
       return fileIdFromQuery;
     }
 
-    // 再尝试路径中提取 24 位 hex（兼容 chat/<fileId>-filename.ext）
-    const pathMatches = [...urlObj.pathname.matchAll(/[a-f0-9]{24}/gi)];
-    if (pathMatches.length > 0) {
-      // 某些路径包含多个 24 位 hex，通常文件 ID 在后一个位置，取最后一个更稳妥
-      const lastMatch = pathMatches[pathMatches.length - 1][0];
-      if (isValidFileId(lastMatch)) {
-        devLog('[extractFileIdFromUrl] Extracted fileId from path:', lastMatch);
-        return lastMatch;
-      }
+    // 兜底：用完整路径作为唯一标识，避免多个文件落在同一个 24 位片段上
+    const fullPath = decodeURIComponent(urlObj.pathname.replace(/^\/+/, ''));
+    if (fullPath) {
+      devLog('[extractFileIdFromUrl] Use full path as fileId:', fullPath.substring(0, 100));
+      return fullPath;
     }
 
-    devLog('[extractFileIdFromUrl] No valid fileId found in URL:', url.substring(0, 100));
+    devLog(
+      '[extractFileIdFromUrl] No valid fileId found in URL, return empty:',
+      url.substring(0, 100)
+    );
     return '';
   } catch (error) {
     // 错误日志保留，生产环境也需要
@@ -73,11 +99,17 @@ export function isValidFileId(id: string): boolean {
  */
 export function checkFileTokenExpired(url: string): boolean {
   try {
-    const tokenMatch = url.match(/[?&]token=([^&]+)/);
+    const tokenMatch = url.match(/[?&]token=([^&]+)/) || url.match(/\/api\/system\/file\/([^/?]+)/);
     if (!tokenMatch) return false;
 
     const token = tokenMatch[1];
-    const payload = JSON.parse(atob(token.split('.')[1]));
+    const base64 = token.split('.')[1];
+    if (!base64) return false;
+    const normalized = base64
+      .replace(/-/g, '+')
+      .replace(/_/g, '/')
+      .padEnd(Math.ceil(base64.length / 4) * 4, '=');
+    const payload = JSON.parse(Buffer.from(normalized, 'base64').toString('utf-8'));
 
     if (payload.exp) {
       const now = Math.floor(Date.now() / 1000);

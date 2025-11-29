@@ -33,7 +33,8 @@ export const formatChatValue2InputType = (value?: ChatItemValueItemType[]): Chat
               name: item.file.name,
               icon: getFileIcon(item.file.name),
               url: item.file.url,
-              key: item.file.key
+              key: item.file.key,
+              fileId: (item.file as any)?.fileId
             }
           : undefined
       )

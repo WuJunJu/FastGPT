@@ -44,6 +44,7 @@ export const dispatchPluginInput = async (
         if (fileItem.key && !fileItem.url) {
           val[i].url = await getS3ChatSource().createGetChatFileURL({
             key: fileItem.key,
+            fileId: (fileItem as any)?.fileId || (fileItem as any)?.id,
             external: true,
             expiredHours: 1
           });

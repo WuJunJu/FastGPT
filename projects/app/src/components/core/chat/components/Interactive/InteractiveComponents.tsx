@@ -139,6 +139,7 @@ export const FormInputComponent = React.memo(function FormInputComponent({
                     try {
                       const newUrl = await getPresignedChatFileGetUrl({
                         key: file.key,
+                        fileId: (file as any)?.fileId || (file as any)?.id,
                         appId,
                         outLinkAuthData
                       });

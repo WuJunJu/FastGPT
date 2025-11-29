@@ -67,6 +67,7 @@ type FastGptWebChatProps = {
   appId?: string;
   customUid?: string; // non-undefined: will be the priority provider for the logger.
   metadata?: Record<string, any>;
+  clientManagedContext?: boolean; // 客户端自行管理上下文时为 true，不读取/保存历史
 };
 
 export type Props = ChatCompletionCreateParams &
@@ -196,6 +197,8 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
       return;
     }
 
+    const { clientManagedContext = false } = req.body as Props;
+
     retainDatasetCite = retainDatasetCite && !!responseDetail;
     const isPlugin = app.type === AppTypeEnum.workflowTool;
 
@@ -228,19 +231,23 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
     // Get and concat history;
     const limit = getMaxHistoryLimitFromNodes(app.modules);
     const [{ histories }, { nodes, edges, chatConfig }, chatDetail] = await Promise.all([
-      getChatItems({
-        appId: app._id,
-        chatId,
-        offset: 0,
-        limit,
-        field: `obj value nodeOutputs`
-      }),
+      clientManagedContext
+        ? Promise.resolve({ histories: [], total: 0 })
+        : getChatItems({
+            appId: app._id,
+            chatId,
+            offset: 0,
+            limit,
+            field: `obj value nodeOutputs`
+          }),
       getAppLatestVersion(app._id, app),
-      MongoChat.findOne({ appId: app._id, chatId }, 'source variableList variables')
+      clientManagedContext
+        ? Promise.resolve(null)
+        : MongoChat.findOne({ appId: app._id, chatId }, 'source variableList variables')
     ]);
 
     // Get store variables(Api variable precedence)
-    if (chatDetail?.variables) {
+    if (!clientManagedContext && chatDetail?.variables) {
       variables = {
         ...chatDetail.variables,
         ...variables
@@ -328,7 +335,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
       return ChatSourceEnum.online;
     })();
 
-    const isInteractiveRequest = !!getLastInteractiveValue(histories);
+    const isInteractiveRequest = !!getLastInteractiveValue(newHistories);
 
     const newTitle = isPlugin
       ? variables.cTime || formatTime2YMDHM(new Date())
@@ -369,10 +376,12 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
       },
       durationSeconds
     };
-    if (isInteractiveRequest) {
-      await updateInteractiveChat(params);
-    } else {
-      await saveChat(params);
+    if (!clientManagedContext) {
+      if (isInteractiveRequest) {
+        await updateInteractiveChat(params);
+      } else {
+        await saveChat(params);
+      }
     }
 
     addLog.info(`completions running time: ${(Date.now() - startTime) / 1000}s`);

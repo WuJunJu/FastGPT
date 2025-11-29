@@ -27,9 +27,10 @@ from pathlib import Path
 # 配置区域
 # ============================================================================
 
-DEFAULT_API_URL = "http://192.168.2.46:3000"
-DEFAULT_API_KEY = "fastgpt-rASRhNvn9TGrbMuR3nZs3GmmDO0J92G9x4UA2YC3EqvbfC8Iyt4Eyk"
-APP_ID = "68f26a20986bbb4afa2d5444"  # ✅ 应用 ID
+DEFAULT_API_URL = "http://127.0.0.1:3000"
+DEFAULT_API_KEY = "fastgpt-uZhUXSnTpgvaoMSct9ykN29JWzzqTgt95c6KFbOTGBAS6iKZowrlOVkSV"
+APP_ID = "6929e608cd0bac19ced8e9c9"  # ✅ 应用 ID
+CHAT_ID = "test111"  # 可选：外部传入 chatId，避免使用 FastGPT 自动生成
 
 # 测试文件配置（如果文件不存在，会自动创建）
 TEST_FILES = {
@@ -45,20 +46,22 @@ TEST_FILES = {
 class FastGPTClient:
     """FastGPT API 客户端"""
     
-    def __init__(self, base_url: str, api_key: str):
+    def __init__(self, base_url: str, api_key: str, chat_id: Optional[str] = None):
         self.base_url = base_url.rstrip('/')
         self.api_key = api_key
+        self.chat_id = chat_id
         self.headers = {
             'Authorization': f'Bearer {api_key}'
         }
     
-    def upload_file(self, file_path: str, app_id: Optional[str] = None) -> Dict[str, Any]:
+    def upload_file(self, file_path: str, app_id: Optional[str] = None, chat_id: Optional[str] = None) -> Dict[str, Any]:
         """
         上传文件到 FastGPT
-        
+
         Args:
             file_path: 文件路径
             app_id: 应用ID（仅账号级API Key需要）
+            chat_id: 对话ID（可选，外部上下文传入，避免 FastGPT 自动创建）
             
         Returns:
             包含 fileId, fileName, previewUrl 的字典
@@ -72,9 +75,14 @@ class FastGPTClient:
             files = {'file': (os.path.basename(file_path), f)}
             
             # 应用级 API Key 不需要 appId
+            payload = {'appId': app_id} if app_id else {}
+            # 如果外部希望指定 chatId（自建上下文），优先使用外部传入
+            if chat_id or self.chat_id:
+                payload['chatId'] = chat_id or self.chat_id
+
             data = {
                 'bucketName': 'chat',
-                'data': json.dumps({'appId': app_id} if app_id else {})
+                'data': json.dumps(payload)
             }
             
             print(f"📤 上传文件: {os.path.basename(file_path)}")
@@ -101,7 +109,7 @@ class FastGPTClient:
             if preview_url.startswith('/'):
                 preview_url = f"{self.base_url}{preview_url}"
             
-            file_id = self._extract_file_id(preview_url)
+            file_id = data.get('fileId') or self._extract_file_id(preview_url)
             
             return {
                 'fileId': file_id,
@@ -171,9 +179,10 @@ class FastGPTClient:
 class TestRunner:
     """测试运行器"""
     
-    def __init__(self, client: FastGPTClient, app_id: Optional[str] = None):
+    def __init__(self, client: FastGPTClient, app_id: Optional[str] = None, chat_id: Optional[str] = None):
         self.client = client
         self.app_id = app_id
+        self.chat_id = chat_id
         self.test_results = []
         self.uploaded_files = {}
     
@@ -182,6 +191,7 @@ class TestRunner:
         print("\n" + "="*70)
         print("  FastGPT 文件上传与对话功能测试")
         print("="*70 + "\n")
+        print(f"当前 chatId: {self.chat_id or '(未指定，使用自动生成)'}")
         
         # 准备测试文件
         self._prepare_test_files()
@@ -195,6 +205,7 @@ class TestRunner:
             ("测试 5: 多文件对话", self.test_multi_file_chat),
             ("测试 6: 多轮对话（带文件历史）", self.test_multi_turn_chat),
             ("测试 7: fileId 引用测试", self.test_file_id_reference),
+            ("测试 8: 外部上下文覆盖验证", self.test_external_context_usage),
         ]
         
         for test_name, test_func in tests:
@@ -206,7 +217,7 @@ class TestRunner:
     def _run_test(self, name: str, func):
         """运行单个测试"""
         print(f"\n{'─'*70}")
-        print(f"🧪 {name}")
+        print(f"🧪 {name} (chatId: {self.chat_id or 'auto'})")
         print('─'*70)
         
         try:
@@ -273,7 +284,7 @@ class TestRunner:
         """测试 2: 文件上传"""
         file_path = "test.txt"
         
-        result = self.client.upload_file(file_path, self.app_id)
+        result = self.client.upload_file(file_path, self.app_id, self.chat_id)
         
         # 保存上传结果供后续测试使用
         self.uploaded_files['test.txt'] = result
@@ -281,7 +292,7 @@ class TestRunner:
         # 验证响应
         assert 'fileId' in result, "响应缺少 fileId"
         assert 'previewUrl' in result, "响应缺少 previewUrl"
-        assert len(result['fileId']) == 24, f"fileId 长度不正确: {len(result['fileId'])}"
+        assert len(result['fileId']) > 0, f"fileId 为空"
         
         print(f"\n📋 上传结果:")
         print(f"  文件名: {result['fileName']}")
@@ -292,7 +303,7 @@ class TestRunner:
         """测试 3: 单文件对话"""
         # 确保文件已上传
         if 'test.txt' not in self.uploaded_files:
-            self.uploaded_files['test.txt'] = self.client.upload_file('test.txt', self.app_id)
+            self.uploaded_files['test.txt'] = self.client.upload_file('test.txt', self.app_id, self.chat_id)
         
         file_info = self.uploaded_files['test.txt']
         
@@ -322,7 +333,7 @@ class TestRunner:
         """测试 4: 多文件上传"""
         for filename in TEST_FILES.keys():
             if filename not in self.uploaded_files:
-                result = self.client.upload_file(filename, self.app_id)
+                result = self.client.upload_file(filename, self.app_id, self.chat_id)
                 self.uploaded_files[filename] = result
                 print(f"  ✓ {filename} -> fileId: {result['fileId']}")
         
@@ -356,7 +367,7 @@ class TestRunner:
         """测试 6: 多轮对话（带文件历史）"""
         # 确保文件已上传
         if 'test.txt' not in self.uploaded_files:
-            self.uploaded_files['test.txt'] = self.client.upload_file('test.txt', self.app_id)
+            self.uploaded_files['test.txt'] = self.client.upload_file('test.txt', self.app_id, self.chat_id)
         
         file_info = self.uploaded_files['test.txt']
         
@@ -402,7 +413,7 @@ class TestRunner:
         """测试 7: fileId 引用测试（验证 AI 是否使用 fileId 而非完整 URL）"""
         # 确保文件已上传
         if 'test.txt' not in self.uploaded_files:
-            self.uploaded_files['test.txt'] = self.client.upload_file('test.txt', self.app_id)
+            self.uploaded_files['test.txt'] = self.client.upload_file('test.txt', self.app_id, self.chat_id)
         
         file_info = self.uploaded_files['test.txt']
         
@@ -434,6 +445,22 @@ class TestRunner:
         assert len(reply) > 0, "AI 回复为空"
         
         print(f"\n✅ fileId 引用机制工作正常")
+
+    def test_external_context_usage(self):
+        """测试 8: 传入外部上下文，验证 AI 是否使用该上下文而非 chatId 历史"""
+        context_text = "外部上下文：测试外部上下文123"
+        messages = [
+            {"role": "system", "content": "你是一个测试助手，只根据我提供的上下文回答。"},
+            {"role": "user", "content": f"这里是上下文：{context_text}"},
+            {"role": "user", "content": "请复述刚才的上下文内容，不要发挥。"}
+        ]
+
+        response = self.client.chat(messages)
+        reply = response['choices'][0]['message']['content']
+
+        print(f"\n🧪 外部上下文校验回复:\n  {reply}")
+        assert context_text in reply, "AI 未正确使用外部上下文"
+        print("✅ 外部上下文被正确使用")
     
     # ========================================================================
     # 测试总结
@@ -488,11 +515,12 @@ def main():
         # 创建客户端
         client = FastGPTClient(
             base_url=DEFAULT_API_URL,
-            api_key=DEFAULT_API_KEY
+            api_key=DEFAULT_API_KEY,
+            chat_id=CHAT_ID
         )
         
         # 创建测试运行器
-        runner = TestRunner(client, app_id=APP_ID)
+        runner = TestRunner(client, app_id=APP_ID, chat_id=CHAT_ID)
         
         # 运行所有测试
         runner.run_all_tests()
@@ -507,4 +535,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-

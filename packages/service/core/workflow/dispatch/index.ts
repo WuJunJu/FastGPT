@@ -143,6 +143,7 @@ export async function dispatchWorkFlow({
     if (item.type !== ChatItemValueTypeEnum.file || !item.file?.key) continue;
     item.file.url = await getS3ChatSource().createGetChatFileURL({
       key: item.file.key,
+      fileId: (item.file as any)?.fileId || (item.file as any)?.id,
       external: true
     });
   }

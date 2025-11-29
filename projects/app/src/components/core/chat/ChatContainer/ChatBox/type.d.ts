@@ -13,6 +13,7 @@ export type UserInputFileItemType = {
   status: 0 | 1; // 0: uploading, 1: success
   url?: string;
   key?: string; // S3 key for the file
+  fileId?: string; // fastgpt file identifier
   process?: number;
   error?: string;
 };
