@@ -110,7 +110,7 @@ const FileSelector = ({
 
           try {
             // Get Upload Post Presigned URL
-            const { url, fields } = await getUploadChatFilePresignedUrl({
+            const { url, fields, fileId } = await getUploadChatFilePresignedUrl({
               filename: file.rawFile.name,
               appId,
               chatId,
@@ -138,7 +138,7 @@ const FileSelector = ({
             });
             const previewUrl = await getPresignedChatFileGetUrl({
               key: fields.key,
-              fileId: res.fileId,
+              fileId,
               appId,
               outLinkAuthData
             });
@@ -148,7 +148,7 @@ const FileSelector = ({
               if (item.id === file.id) {
                 item.url = previewUrl;
                 item.key = fields.key;
-                item.fileId = res.fileId;
+                item.fileId = fileId;
                 item.process = 100;
               }
             });
