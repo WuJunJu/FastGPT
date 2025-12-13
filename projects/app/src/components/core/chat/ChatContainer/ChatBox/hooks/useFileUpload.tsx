@@ -12,6 +12,7 @@ import { type UseFieldArrayReturn } from 'react-hook-form';
 import { type ChatBoxInputFormType, type UserInputFileItemType } from '../type';
 import { type AppFileSelectConfigType } from '@fastgpt/global/core/app/type';
 import { useSystemStore } from '@/web/common/system/useSystemStore';
+import { fileToBase64 } from '@/web/common/file/utils';
 import { type OutLinkChatAuthProps } from '@fastgpt/global/support/permission/chat';
 import {
   getPresignedChatFileGetUrl,
@@ -21,6 +22,7 @@ import {
 } from '@/web/common/file/api';
 import { getUploadFileType } from '@fastgpt/global/core/app/constants';
 import { parseS3UploadError } from '@fastgpt/global/common/error/s3';
+import { compressImageFile } from '@fastgpt/web/common/file/img';
 
 type UseFileUploadOptions = {
   fileSelectConfig: AppFileSelectConfigType;
@@ -125,22 +127,29 @@ export const useFileUpload = (props: UseFileUploadOptions) => {
           (file) =>
             new Promise<UserInputFileItemType>((resolve, reject) => {
               if (file.type.includes('image')) {
-                const reader = new FileReader();
-                reader.readAsDataURL(file);
-                reader.onload = () => {
-                  const item: UserInputFileItemType = {
-                    id: getNanoid(6),
-                    rawFile: file,
-                    type: ChatFileTypeEnum.image,
-                    name: file.name,
-                    icon: reader.result as string,
-                    status: 0
-                  };
-                  resolve(item);
-                };
-                reader.onerror = () => {
-                  reject(reader.error);
-                };
+                (async () => {
+                  try {
+                    const compressed = await compressImageFile({
+                      file,
+                      maxSide: 1536,
+                      // base64 会膨胀约 33%，多图更容易触发上游/网关体积限制
+                      maxBytes: 1024 * 1024,
+                      outputType: 'image/jpeg'
+                    });
+                    const icon = await fileToBase64(compressed);
+
+                    resolve({
+                      id: getNanoid(6),
+                      rawFile: compressed,
+                      type: ChatFileTypeEnum.image,
+                      name: compressed.name,
+                      icon,
+                      status: 0
+                    });
+                  } catch (error) {
+                    reject(error);
+                  }
+                })();
               } else {
                 resolve({
                   id: getNanoid(6),

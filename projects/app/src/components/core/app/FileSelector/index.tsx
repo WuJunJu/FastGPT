@@ -35,6 +35,8 @@ import { getErrText } from '@fastgpt/global/common/error/utils';
 import { formatFileSize } from '@fastgpt/global/common/file/tools';
 import { WorkflowRuntimeContext } from '@/components/core/chat/ChatContainer/context/workflowRuntimeContext';
 import { parseS3UploadError } from '@fastgpt/global/common/error/s3';
+import { fileToBase64 } from '@/web/common/file/utils';
+import { compressImageFile } from '@fastgpt/web/common/file/img';
 
 const FileSelector = ({
   value,
@@ -224,22 +226,27 @@ const FileSelector = ({
           (file) =>
             new Promise<UserInputFileItemType>((resolve, reject) => {
               if (file.type.includes('image')) {
-                const reader = new FileReader();
-                reader.readAsDataURL(file);
-                reader.onload = () => {
-                  const item: UserInputFileItemType = {
-                    id: getNanoid(6),
-                    rawFile: file,
-                    type: ChatFileTypeEnum.image,
-                    name: file?.name,
-                    icon: reader.result as string,
-                    status: 0
-                  };
-                  resolve(item);
-                };
-                reader.onerror = () => {
-                  reject(reader.error);
-                };
+                (async () => {
+                  try {
+                    const compressed = await compressImageFile({
+                      file,
+                      maxSide: 1536,
+                      maxBytes: 1024 * 1024,
+                      outputType: 'image/jpeg'
+                    });
+                    const icon = await fileToBase64(compressed);
+                    resolve({
+                      id: getNanoid(6),
+                      rawFile: compressed,
+                      type: ChatFileTypeEnum.image,
+                      name: compressed.name,
+                      icon,
+                      status: 0
+                    });
+                  } catch (error) {
+                    reject(error);
+                  }
+                })();
               } else {
                 resolve({
                   id: getNanoid(6),
