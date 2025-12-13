@@ -145,6 +145,7 @@ export type SystemEnvType = {
   chatApiKey?: string;
 
   customPdfParse?: customPdfParseType;
+  officeFileConvert?: officeFileConvertType;
 };
 
 export type customPdfParseType = {
@@ -152,6 +153,12 @@ export type customPdfParseType = {
   key?: string;
   doc2xKey?: string;
   price?: number;
+};
+
+export type officeFileConvertType = {
+  url?: string;
+  key?: string;
+  timeout?: number;
 };
 
 export type LicenseDataType = {

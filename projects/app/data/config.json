@@ -17,6 +17,11 @@
       "key": "", // 自定义 PDF 解析服务密钥
       "doc2xKey": "", // doc2x 服务密钥
       "price": 0 // PDF 解析服务价格
+    },
+    "officeFileConvert": {
+      "url": "", // 旧版 Office 转换服务地址（.doc/.ppt/.xls -> .docx/.pptx/.xlsx），multipart/form-data 上传 file，返回 application/octet-stream
+      "key": "", // 可选：Bearer Token
+      "timeout": 600000 // 请求超时(ms)
     }
   }
 }

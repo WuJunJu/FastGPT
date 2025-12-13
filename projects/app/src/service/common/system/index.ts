@@ -158,6 +158,29 @@ export async function initSystemConfig() {
     subPlans: fastgptConfig.subPlans
   };
 
+  // Env overrides (avoid putting secrets into config.json / database)
+  if (process.env.OFFICE_CONVERT_URL) {
+    config.systemEnv.officeFileConvert = {
+      ...(config.systemEnv.officeFileConvert || {}),
+      url: process.env.OFFICE_CONVERT_URL
+    };
+  }
+  if (process.env.OFFICE_CONVERT_KEY) {
+    config.systemEnv.officeFileConvert = {
+      ...(config.systemEnv.officeFileConvert || {}),
+      key: process.env.OFFICE_CONVERT_KEY
+    };
+  }
+  if (process.env.OFFICE_CONVERT_TIMEOUT) {
+    const timeout = Number(process.env.OFFICE_CONVERT_TIMEOUT);
+    if (!Number.isNaN(timeout) && timeout > 0) {
+      config.systemEnv.officeFileConvert = {
+        ...(config.systemEnv.officeFileConvert || {}),
+        timeout
+      };
+    }
+  }
+
   // set config
   initFastGPTConfig(config);
 

@@ -24,12 +24,17 @@ import { getNanoid } from '@fastgpt/global/common/string/tools';
 import MyDivider from '@fastgpt/web/components/common/MyDivider';
 import MyAvatar from '@fastgpt/web/components/common/Avatar';
 import { z } from 'zod';
-import { getPresignedChatFileGetUrl, getUploadChatFilePresignedUrl } from '@/web/common/file/api';
+import {
+  getPresignedChatFileGetUrl,
+  getUploadChatFilePresignedUrl,
+  postS3UploadFile,
+  uploadChatFileByApi
+} from '@/web/common/file/api';
 import { useContextSelector } from 'use-context-selector';
-import { POST } from '@/web/common/api/request';
 import { getErrText } from '@fastgpt/global/common/error/utils';
 import { formatFileSize } from '@fastgpt/global/common/file/tools';
 import { WorkflowRuntimeContext } from '@/components/core/chat/ChatContainer/context/workflowRuntimeContext';
+import { parseS3UploadError } from '@fastgpt/global/common/error/s3';
 
 const FileSelector = ({
   value,
@@ -121,11 +126,12 @@ const FileSelector = ({
             const formData = new FormData();
             Object.entries(fields).forEach(([k, v]) => formData.set(k, v));
             formData.set('file', file.rawFile);
-            await POST(url, formData, {
-              headers: {
-                'Content-Type': 'multipart/form-data; charset=utf-8'
-              },
-              onUploadProgress: (e) => {
+            let previewUrl = '';
+            let finalKey = fields.key;
+            let finalFileId = fileId;
+
+            try {
+              await postS3UploadFile(url, formData, (e) => {
                 if (!e.total) return;
                 const percent = Math.round((e.loaded / e.total) * 100);
                 files.forEach((item) => {
@@ -134,21 +140,46 @@ const FileSelector = ({
                   }
                 });
                 handleChangeFiles(files);
+              });
+
+              previewUrl = await getPresignedChatFileGetUrl({
+                key: fields.key,
+                fileId,
+                appId,
+                outLinkAuthData
+              });
+            } catch (error: any) {
+              if (error?.message === 'Network Error' && !error?.response) {
+                const apiRes = await uploadChatFileByApi({
+                  file: file.rawFile,
+                  appId,
+                  chatId,
+                  outLinkAuthData,
+                  onUploadProgress: (e) => {
+                    if (!e.total) return;
+                    const percent = Math.round((e.loaded / e.total) * 100);
+                    files.forEach((item) => {
+                      if (item.id === file.id) {
+                        item.process = percent;
+                      }
+                    });
+                    handleChangeFiles(files);
+                  }
+                });
+                previewUrl = apiRes.previewUrl;
+                finalKey = apiRes.fileKey;
+                finalFileId = apiRes.fileId;
+              } else {
+                return Promise.reject(parseS3UploadError({ t, error }));
               }
-            });
-            const previewUrl = await getPresignedChatFileGetUrl({
-              key: fields.key,
-              fileId,
-              appId,
-              outLinkAuthData
-            });
+            }
 
             // Update file url and key
             files.forEach((item) => {
               if (item.id === file.id) {
                 item.url = previewUrl;
-                item.key = fields.key;
-                item.fileId = fileId;
+                item.key = finalKey;
+                item.fileId = finalFileId;
                 item.process = 100;
               }
             });
@@ -166,7 +197,7 @@ const FileSelector = ({
         })
       );
     },
-    [handleChangeFiles, setFileUploadingCount, appId, chatId, outLinkAuthData]
+    [handleChangeFiles, setFileUploadingCount, appId, chatId, outLinkAuthData, t]
   );
 
   // Selector props

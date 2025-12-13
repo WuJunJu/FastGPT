@@ -5,9 +5,7 @@ import { getS3ChatSource } from '@fastgpt/service/common/s3/sources/chat';
 import { getNanoid } from '@fastgpt/global/common/string/tools';
 import busboy from 'busboy';
 import fs from 'node:fs/promises';
-import crypto from 'node:crypto';
-import { jwtSignS3ObjectKey } from '@fastgpt/service/common/s3/utils';
-import { addYears } from 'date-fns';
+import type { OutLinkChatAuthProps } from '@fastgpt/global/support/permission/chat';
 
 export const config = {
   api: {
@@ -75,13 +73,14 @@ async function handler(req: ApiRequestProps) {
     } catch (err) {
       return {};
     }
-  })() as { appId?: string; chatId?: string };
+  })() as { appId?: string; chatId?: string; outLinkAuthData?: OutLinkChatAuthProps };
 
   const appId = parsedData.appId;
   if (!appId) {
     return Promise.reject('appId is required');
   }
   const chatId = parsedData.chatId || getNanoid(24);
+  const outLinkAuthData = parsedData.outLinkAuthData;
 
   // 鉴权：兼容账号/应用级 API Key
   const { uid } = await authChatCrud({
@@ -89,12 +88,16 @@ async function handler(req: ApiRequestProps) {
     authToken: true,
     authApiKey: true,
     appId,
-    chatId
+    chatId,
+    ...(outLinkAuthData ?? {})
   });
 
   const filename = file.filename;
-  const fileId = crypto.randomBytes(12).toString('hex');
-  const { url: postURL, fields: presignFields } = await getS3ChatSource().createUploadChatFileURL({
+  const {
+    url: postURL,
+    fields: presignFields,
+    fileId
+  } = await getS3ChatSource().createUploadChatFileURL({
     appId,
     chatId,
     filename,
@@ -119,12 +122,12 @@ async function handler(req: ApiRequestProps) {
     await fs.unlink(file.filepath).catch(() => {});
   }
 
-  const previewUrl = `${jwtSignS3ObjectKey(presignFields.key, addYears(new Date(), 100), {
-    fileId
-  })}?${new URLSearchParams({
-    filename,
-    fileId
-  }).toString()}`;
+  const previewUrl = await getS3ChatSource().createGetChatFileURL({
+    key: presignFields.key,
+    fileId,
+    external: true,
+    expiredHours: 24 * 365 * 100 // 100 years
+  });
 
   return {
     fileId, // 短 ID，供文档解析/工具调用

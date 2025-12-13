@@ -13,8 +13,12 @@ import { type ChatBoxInputFormType, type UserInputFileItemType } from '../type';
 import { type AppFileSelectConfigType } from '@fastgpt/global/core/app/type';
 import { useSystemStore } from '@/web/common/system/useSystemStore';
 import { type OutLinkChatAuthProps } from '@fastgpt/global/support/permission/chat';
-import { getPresignedChatFileGetUrl, getUploadChatFilePresignedUrl } from '@/web/common/file/api';
-import { POST } from '@/web/common/api/request';
+import {
+  getPresignedChatFileGetUrl,
+  getUploadChatFilePresignedUrl,
+  postS3UploadFile,
+  uploadChatFileByApi
+} from '@/web/common/file/api';
 import { getUploadFileType } from '@fastgpt/global/core/app/constants';
 import { parseS3UploadError } from '@fastgpt/global/common/error/s3';
 
@@ -183,33 +187,55 @@ export const useFileUpload = (props: UseFileUploadOptions) => {
             outLinkAuthData
           });
 
-          // Upload File to S3
-          const formData = new FormData();
-          Object.entries(fields).forEach(([k, v]) => formData.set(k, v));
-          formData.set('file', copyFile.rawFile);
-          await POST(url, formData, {
-            headers: {
-              'Content-Type': 'multipart/form-data; charset=utf-8'
-            },
-            onUploadProgress: (e) => {
+          let previewUrl = '';
+          let finalKey = fields.key;
+          let finalFileId = fileId;
+
+          try {
+            // Upload File to S3 (presigned)
+            const formData = new FormData();
+            Object.entries(fields).forEach(([k, v]) => formData.set(k, v));
+            formData.set('file', copyFile.rawFile);
+            await postS3UploadFile(url, formData, (e) => {
               if (!e.total) return;
               const percent = Math.round((e.loaded / e.total) * 100);
               copyFile.process = percent;
               updateFiles(fileIndex, copyFile);
-            }
-          }).catch((error) => Promise.reject(parseS3UploadError({ t, error, maxSize })));
+            });
 
-          const previewUrl = await getPresignedChatFileGetUrl({
-            key: fields.key,
-            fileId,
-            appId,
-            outLinkAuthData
-          });
+            previewUrl = await getPresignedChatFileGetUrl({
+              key: fields.key,
+              fileId,
+              appId,
+              outLinkAuthData
+            });
+          } catch (error: any) {
+            // 一些环境里（浏览器 CORS/网络层）会把上传失败表现为 Network Error 且没有 status code
+            if (error?.message === 'Network Error' && !error?.response) {
+              const apiRes = await uploadChatFileByApi({
+                file: copyFile.rawFile,
+                appId,
+                chatId,
+                outLinkAuthData,
+                onUploadProgress: (e) => {
+                  if (!e.total) return;
+                  const percent = Math.round((e.loaded / e.total) * 100);
+                  copyFile.process = percent;
+                  updateFiles(fileIndex, copyFile);
+                }
+              });
+              previewUrl = apiRes.previewUrl;
+              finalKey = apiRes.fileKey;
+              finalFileId = apiRes.fileId;
+            } else {
+              return Promise.reject(parseS3UploadError({ t, error, maxSize }));
+            }
+          }
 
           // Update file url and key
           copyFile.url = previewUrl;
-          copyFile.key = fields.key;
-          copyFile.fileId = fileId;
+          copyFile.key = finalKey;
+          copyFile.fileId = finalFileId;
           updateFiles(fileIndex, copyFile);
         } catch (error) {
           errorFileIndex.push(fileList.findIndex((item) => item.id === file.id)!);

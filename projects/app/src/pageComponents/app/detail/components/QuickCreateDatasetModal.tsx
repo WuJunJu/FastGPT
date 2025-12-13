@@ -19,8 +19,11 @@ import MyIcon from '@fastgpt/web/components/common/Icon';
 import { useUploadAvatar } from '@fastgpt/web/common/file/hooks/useUploadAvatar';
 import { useRequest2 } from '@fastgpt/web/hooks/useRequest';
 import { postCreateDatasetWithFiles, getDatasetById } from '@/web/core/dataset/api';
-import { getUploadAvatarPresignedUrl, getUploadTempFilePresignedUrl } from '@/web/common/file/api';
-import { POST } from '@/web/common/api/request';
+import {
+  getUploadAvatarPresignedUrl,
+  getUploadTempFilePresignedUrl,
+  postS3UploadFile
+} from '@/web/common/file/api';
 import { useSystemStore } from '@/web/common/system/useSystemStore';
 import { getWebDefaultEmbeddingModel, getWebDefaultLLMModel } from '@/web/common/system/utils';
 import { getErrText } from '@fastgpt/global/common/error/utils';
@@ -90,26 +93,21 @@ const QuickCreateDatasetModal = ({
             Object.entries(fields).forEach(([k, v]) => formData.set(k, v));
             formData.set('file', file);
 
-            await POST(url, formData, {
-              headers: {
-                'Content-Type': 'multipart/form-data; charset=utf-8'
-              },
-              onUploadProgress: (e) => {
-                if (!e.total) return;
-                const percent = Math.round((e.loaded / e.total) * 100);
-                setSelectFiles((state) =>
-                  state.map((item) =>
-                    item.id === fileId
-                      ? {
-                          ...item,
-                          uploadedFileRate: item.uploadedFileRate
-                            ? Math.max(percent, item.uploadedFileRate)
-                            : percent
-                        }
-                      : item
-                  )
-                );
-              }
+            await postS3UploadFile(url, formData, (e) => {
+              if (!e.total) return;
+              const percent = Math.round((e.loaded / e.total) * 100);
+              setSelectFiles((state) =>
+                state.map((item) =>
+                  item.id === fileId
+                    ? {
+                        ...item,
+                        uploadedFileRate: item.uploadedFileRate
+                          ? Math.max(percent, item.uploadedFileRate)
+                          : percent
+                      }
+                    : item
+                )
+              );
             })
               .then(() => {
                 setSelectFiles((state) =>

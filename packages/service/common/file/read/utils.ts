@@ -11,6 +11,12 @@ import { readRawContentFromBuffer } from '../../../worker/function';
 import { uploadImage2S3Bucket } from '../../s3/utils';
 import { Mimes } from '../../s3/constants';
 
+const legacyOfficeExtMap: Record<string, string> = {
+  doc: 'docx',
+  ppt: 'pptx',
+  xls: 'xlsx'
+};
+
 export type readRawTextByLocalFileParams = {
   teamId: string;
   tmbId: string;
@@ -73,11 +79,94 @@ export const readS3FileContentByBuffer = async ({
 }): Promise<{
   rawText: string;
 }> => {
+  const convertLegacyOfficeFile = async () => {
+    const targetExt = legacyOfficeExtMap[extension];
+    if (!targetExt) return { extension, buffer };
+
+    const url = global.systemEnv.officeFileConvert?.url;
+    const token = global.systemEnv.officeFileConvert?.key;
+    const timeout = global.systemEnv.officeFileConvert?.timeout || 600000;
+
+    if (!url) {
+      return Promise.reject(
+        `暂不支持解析 ".${extension}" 文件，请转换为 ".${targetExt}" 后再上传，或配置 systemEnv.officeFileConvert.url 进行自动转换。`
+      );
+    }
+
+    const start = Date.now();
+    addLog.info('Converting legacy Office file', { from: extension, to: targetExt });
+
+    const data = new FormData();
+    data.append('file', buffer, { filename: `file.${extension}` });
+
+    const res = await axios.post(url, data, {
+      timeout,
+      responseType: 'arraybuffer',
+      headers: {
+        ...data.getHeaders(),
+        Authorization: token ? `Bearer ${token}` : undefined
+      },
+      validateStatus: () => true
+    });
+
+    if (res.status < 200 || res.status >= 300) {
+      const errText = Buffer.isBuffer(res.data)
+        ? res.data.toString('utf-8')
+        : typeof res.data === 'string'
+          ? res.data
+          : JSON.stringify(res.data);
+      return Promise.reject(
+        `旧版 Office 转换失败: HTTP ${res.status}${errText ? ` ${errText}` : ''}`
+      );
+    }
+
+    const contentType = String(res.headers?.['content-type'] || '');
+    const resBuffer = Buffer.from(res.data as ArrayBuffer);
+
+    // Some services return JSON (base64/url) even when responseType=arraybuffer
+    if (contentType.includes('application/json')) {
+      try {
+        const json = JSON.parse(resBuffer.toString('utf-8')) as any;
+        if (json?.error) return Promise.reject(json.error);
+        if (typeof json?.url === 'string' && json.url) {
+          const dl = await axios.get(json.url, { responseType: 'arraybuffer', timeout });
+          addLog.info('Legacy Office convert finished (download)', {
+            time: Date.now() - start,
+            from: extension,
+            to: targetExt
+          });
+          return { extension: targetExt, buffer: Buffer.from(dl.data as ArrayBuffer) };
+        }
+        const base64 =
+          json?.base64 || json?.fileBase64 || json?.data?.base64 || json?.data?.fileBase64;
+        if (typeof base64 === 'string' && base64) {
+          addLog.info('Legacy Office convert finished (base64)', {
+            time: Date.now() - start,
+            from: extension,
+            to: targetExt
+          });
+          return { extension: targetExt, buffer: Buffer.from(base64, 'base64') };
+        }
+      } catch (error) {
+        // Ignore, fallback to binary
+      }
+    }
+
+    addLog.info('Legacy Office convert finished', {
+      time: Date.now() - start,
+      from: extension,
+      to: targetExt
+    });
+
+    return { extension: targetExt, buffer: resBuffer };
+  };
+
+  const { extension: parseExtension, buffer: parseBuffer } = await convertLegacyOfficeFile();
   const systemParse = () =>
     readRawContentFromBuffer({
-      extension,
+      extension: parseExtension,
       encoding,
-      buffer
+      buffer: parseBuffer
     });
   const parsePdfFromCustomService = async (): Promise<ReadFileResponse> => {
     const url = global.systemEnv.customPdfParse?.url;
@@ -155,10 +244,10 @@ export const readS3FileContentByBuffer = async ({
   };
 
   const start = Date.now();
-  addLog.debug(`Start parse file`, { extension });
+  addLog.debug(`Start parse file`, { extension: parseExtension });
 
   let { rawText, formatText, imageList } = await (async () => {
-    if (extension === 'pdf') {
+    if (parseExtension === 'pdf') {
       return await pdfParseFn();
     }
     return await systemParse();

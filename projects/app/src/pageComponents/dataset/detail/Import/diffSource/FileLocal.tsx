@@ -13,9 +13,8 @@ import { getErrText } from '@fastgpt/global/common/error/utils';
 import { formatFileSize } from '@fastgpt/global/common/file/tools';
 import { getFileIcon } from '@fastgpt/global/common/file/icon';
 import { DatasetPageContext } from '@/web/core/dataset/context/datasetPageContext';
-import { getUploadDatasetFilePresignedUrl } from '@/web/common/file/api';
-import { POST } from '@/web/common/api/request';
 import { parseS3UploadError } from '@fastgpt/global/common/error/s3';
+import { getUploadDatasetFilePresignedUrl, postS3UploadFile } from '@/web/common/file/api';
 
 const DataProcess = dynamic(() => import('../commonProgress/DataProcess'));
 const PreviewData = dynamic(() => import('../commonProgress/PreviewData'));
@@ -77,26 +76,21 @@ const SelectFile = React.memo(function SelectFile() {
               const formData = new FormData();
               Object.entries(fields).forEach(([k, v]) => formData.set(k, v));
               formData.set('file', file);
-              await POST(url, formData, {
-                headers: {
-                  'Content-Type': 'multipart/form-data; charset=utf-8'
-                },
-                onUploadProgress: (e) => {
-                  if (!e.total) return;
-                  const percent = Math.round((e.loaded / e.total) * 100);
-                  setSelectFiles((state) =>
-                    state.map((item) =>
-                      item.id === fileId
-                        ? {
-                            ...item,
-                            uploadedFileRate: item.uploadedFileRate
-                              ? Math.max(percent, item.uploadedFileRate)
-                              : percent
-                          }
-                        : item
-                    )
-                  );
-                }
+              await postS3UploadFile(url, formData, (e) => {
+                if (!e.total) return;
+                const percent = Math.round((e.loaded / e.total) * 100);
+                setSelectFiles((state) =>
+                  state.map((item) =>
+                    item.id === fileId
+                      ? {
+                          ...item,
+                          uploadedFileRate: item.uploadedFileRate
+                            ? Math.max(percent, item.uploadedFileRate)
+                            : percent
+                        }
+                      : item
+                  )
+                );
               })
                 .then(() => {
                   setSelectFiles((state) =>
