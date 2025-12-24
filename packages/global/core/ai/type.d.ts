@@ -50,6 +50,7 @@ export type ChatCompletionMessageParam = (
   | CustomChatCompletionAssistantMessageParam
 ) & {
   reasoning_text?: string;
+  reasoning_content?: string; // DeepSeek API field for thinking mode tool calls
   dataId?: string;
   hideInUI?: boolean;
 };

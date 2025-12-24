@@ -120,25 +120,32 @@ export const createLLMResponse = async <T extends CompletionsBodyType>(
     }
   })();
 
-  const assistantMessage: ChatCompletionMessageParam[] = [
-    ...(answerText || reasoningText
-      ? [
-          {
-            role: ChatCompletionRequestMessageRoleEnum.Assistant as 'assistant',
-            content: answerText,
-            reasoning_text: reasoningText
-          }
-        ]
-      : []),
-    ...(toolCalls?.length
-      ? [
-          {
-            role: ChatCompletionRequestMessageRoleEnum.Assistant as 'assistant',
-            tool_calls: toolCalls
-          }
-        ]
-      : [])
-  ];
+  // DeepSeek API requires reasoning_content to be passed back during tool calls
+  // in thinking mode. We consolidate the message to include both tool_calls and reasoning_content.
+  const assistantMessage: ChatCompletionMessageParam[] = (() => {
+    // If there are tool calls, include reasoning_content in the same message
+    if (toolCalls?.length) {
+      return [
+        {
+          role: ChatCompletionRequestMessageRoleEnum.Assistant as 'assistant',
+          content: answerText || null,
+          ...(reasoningText ? { reasoning_content: reasoningText } : {}),
+          tool_calls: toolCalls
+        }
+      ];
+    }
+    // No tool calls, just return text response with reasoning
+    if (answerText || reasoningText) {
+      return [
+        {
+          role: ChatCompletionRequestMessageRoleEnum.Assistant as 'assistant',
+          content: answerText,
+          ...(reasoningText ? { reasoning_content: reasoningText } : {})
+        }
+      ];
+    }
+    return [];
+  })();
 
   // Usage count
   const inputTokens =

@@ -255,7 +255,11 @@ export const loadRequestMessages = async ({
       function_call: item.function_call,
       name: item.name,
       refusal: item.refusal,
-      tool_calls: item.tool_calls
+      tool_calls: item.tool_calls,
+      // DeepSeek API requires reasoning_content to be passed back during tool calls
+      ...((item as any).reasoning_content
+        ? { reasoning_content: (item as any).reasoning_content }
+        : {})
     };
   };
   const parseAssistantContent = (
