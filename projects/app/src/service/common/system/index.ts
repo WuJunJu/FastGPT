@@ -124,7 +124,7 @@ const defaultFeConfigs: FastGPTFeConfigsType = {
   },
   scripts: [],
   favicon: '/favicon.ico',
-  uploadFileMaxSize: 500,
+  uploadFileMaxSize: 50,
   chineseRedirectUrl: process.env.CHINESE_IP_REDIRECT_URL || ''
 };
 
@@ -141,8 +141,8 @@ export async function initSystemConfig() {
   // get config from database
   const config: FastGPTConfigFileType = {
     feConfigs: {
-      ...fileRes?.feConfigs,
       ...defaultFeConfigs,
+      ...fileRes?.feConfigs,
       ...(fastgptConfig.feConfigs || {}),
       isPlus: !!licenseData,
       hideChatCopyrightSetting: process.env.HIDE_CHAT_COPYRIGHT_SETTING === 'true',

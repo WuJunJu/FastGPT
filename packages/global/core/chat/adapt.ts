@@ -82,7 +82,8 @@ export const chats2GPTMessages = ({
                 type: 'file_url',
                 name: item.file?.name || '',
                 url: item.file.url,
-                key: item.file.key
+                key: item.file.key,
+                fileId: item.file.fileId
               };
             }
           }
@@ -254,7 +255,8 @@ export const GPTMessages2Chats = ({
                     type: ChatFileTypeEnum.file,
                     name: item.name,
                     url: item.url,
-                    key: item.key
+                    key: item.key,
+                    fileId: item.fileId
                   }
                 });
               }

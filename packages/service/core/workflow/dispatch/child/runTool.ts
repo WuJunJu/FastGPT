@@ -22,6 +22,7 @@ import { getNodeErrResponse } from '../utils';
 import { splitCombineToolId } from '@fastgpt/global/core/app/tool/utils';
 import { getAppVersionById } from '../../../../core/app/version/controller';
 import { runHTTPTool } from '../../../app/http';
+import { isLocalSystemTool, runLocalSystemTool } from '../../../app/tool/localSystemTools';
 
 type SystemInputConfigType = {
   type: SystemToolSecretInputTypeEnum;
@@ -85,46 +86,57 @@ export const dispatchRunTool = async (props: RunToolProps): Promise<RunToolRespo
         ...inputConfigParams
       };
 
-      const formatToolId = tool.id.split('-')[1];
+      const { pluginId: resolvedToolId } = splitCombineToolId(tool.id);
+      const formatToolId = resolvedToolId.startsWith('systemTool-')
+        ? resolvedToolId.slice('systemTool-'.length)
+        : resolvedToolId;
       let answerText = '';
 
-      const res = await APIRunSystemTool({
-        toolId: formatToolId,
-        inputs,
-        systemVar: {
-          user: {
-            id: variables.userId,
-            username: runningUserInfo.username,
-            contact: runningUserInfo.contact,
-            membername: runningUserInfo.memberName,
-            teamName: runningUserInfo.teamName,
-            teamId: runningUserInfo.teamId,
-            name: runningUserInfo.tmbId
-          },
-          app: {
-            id: runningAppInfo.id,
-            name: runningAppInfo.id
-          },
-          tool: {
-            id: formatToolId,
-            version: version || tool.versionList?.[0]?.value || ''
-          },
-          time: variables.cTime
-        },
-        onMessage: ({ type, content }) => {
-          if (workflowStreamResponse && content) {
-            answerText += content;
-            workflowStreamResponse({
-              event: type as unknown as SseResponseEventEnum,
-              data: textAdaptGptResponse({
-                text: content
-              })
+      const res: { output?: Record<string, any>; error?: any; toolResponse?: any } =
+        isLocalSystemTool(resolvedToolId)
+          ? await runLocalSystemTool({
+              toolId: resolvedToolId,
+              inputs,
+              variables
+            })
+          : await APIRunSystemTool({
+              toolId: formatToolId,
+              inputs,
+              systemVar: {
+                user: {
+                  id: variables.userId,
+                  username: runningUserInfo.username,
+                  contact: runningUserInfo.contact,
+                  membername: runningUserInfo.memberName,
+                  teamName: runningUserInfo.teamName,
+                  teamId: runningUserInfo.teamId,
+                  name: runningUserInfo.tmbId
+                },
+                app: {
+                  id: runningAppInfo.id,
+                  name: runningAppInfo.id
+                },
+                tool: {
+                  id: formatToolId,
+                  version: version || tool.versionList?.[0]?.value || ''
+                },
+                time: variables.cTime
+              },
+              onMessage: ({ type, content }) => {
+                if (workflowStreamResponse && content) {
+                  answerText += content;
+                  workflowStreamResponse({
+                    event: type as unknown as SseResponseEventEnum,
+                    data: textAdaptGptResponse({
+                      text: content
+                    })
+                  });
+                }
+              }
             });
-          }
-        }
-      });
 
       let result = res.output || {};
+      const toolResponse = res.toolResponse ?? result;
 
       if (res.error) {
         // 适配旧版：旧版本没有catchError，部分工具会正常返回 error 字段作为响应。
@@ -135,7 +147,7 @@ export const dispatchRunTool = async (props: RunToolProps): Promise<RunToolRespo
               toolRes: res.error,
               moduleLogo: avatar
             },
-            [DispatchNodeResponseKeyEnum.toolResponses]: res.error
+            [DispatchNodeResponseKeyEnum.toolResponses]: res.toolResponse ?? res.error
           };
         }
 
@@ -183,7 +195,7 @@ export const dispatchRunTool = async (props: RunToolProps): Promise<RunToolRespo
           moduleLogo: avatar,
           totalPoints: usagePoints
         },
-        [DispatchNodeResponseKeyEnum.toolResponses]: result,
+        [DispatchNodeResponseKeyEnum.toolResponses]: toolResponse,
         [DispatchNodeResponseKeyEnum.nodeDispatchUsages]: [
           {
             moduleName: name,

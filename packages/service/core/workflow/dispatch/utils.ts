@@ -174,6 +174,34 @@ export const filterSystemVariables = (variables: Record<string, any>): SystemVar
   };
 };
 
+const transientWorkflowVariableKeys = [
+  'SandboxContextToken',
+  'SandboxChatId',
+  'SandboxSessionId'
+] as const;
+
+export const getTransientWorkflowVariables = (variables: Record<string, any> = {}) => {
+  return transientWorkflowVariableKeys.reduce<Record<string, any>>((acc, key) => {
+    if (variables[key] !== undefined) {
+      acc[key] = variables[key];
+    }
+    return acc;
+  }, {});
+};
+
+export const getRemovedWorkflowVariables = ({
+  variables,
+  externalWorkflowVariables = {}
+}: {
+  variables: Record<string, any>;
+  externalWorkflowVariables?: Record<string, any>;
+}) => {
+  return {
+    ...externalWorkflowVariables,
+    ...getTransientWorkflowVariables(variables)
+  };
+};
+
 export const formatHttpError = (error: any) => {
   return {
     message: getErrText(error),

@@ -3,6 +3,7 @@ import { AppToolSourceEnum } from '@fastgpt/global/core/app/tool/constants';
 import { pluginClient, PLUGIN_BASE_URL, PLUGIN_TOKEN } from '../../../thirdProvider/fastgptPlugin';
 import { addLog } from '../../../common/system/log';
 import { retryFn } from '@fastgpt/global/common/system/utils';
+import { getLocalSystemToolTags } from './localSystemTools';
 
 export async function APIGetSystemToolList() {
   const res = await pluginClient.tool.list();
@@ -28,16 +29,29 @@ const runToolInstance = new RunToolWithStream({
 export const APIRunSystemTool = runToolInstance.run.bind(runToolInstance);
 
 export const getSystemToolTags = () => {
+  const localTags = getLocalSystemToolTags();
+
   return retryFn(async () => {
-    const res = await pluginClient.tool.getTags();
+    try {
+      const res = await pluginClient.tool.getTags();
 
-    if (res.status === 200) {
-      const toolTypes = res.body || [];
+      if (res.status === 200) {
+        const toolTypes = res.body || [];
+        const tagMap = new Map<string, any>();
 
-      return toolTypes;
+        [...toolTypes, ...localTags].forEach((tag) => {
+          if (!tag?.id || !tag?.name) return;
+          tagMap.set(tag.id, tag);
+        });
+
+        return Array.from(tagMap.values());
+      }
+
+      addLog.error('Get system tool type error', res.body);
+      return localTags;
+    } catch (error) {
+      addLog.error('Get system tool type error', error);
+      return localTags;
     }
-
-    addLog.error('Get system tool type error', res.body);
-    return [];
   });
 };

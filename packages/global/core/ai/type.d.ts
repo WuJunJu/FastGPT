@@ -20,6 +20,7 @@ export type ChatCompletionContentPartFile = {
   name: string;
   url: string;
   key?: string;
+  fileId?: string;
 };
 // Rewrite ChatCompletionContentPart, Add file type
 export type ChatCompletionContentPart =

@@ -53,6 +53,7 @@ import { getCachedData } from '../../../common/cache';
 import { SystemCacheKeyEnum } from '../../../common/cache/type';
 import { PluginStatusEnum } from '@fastgpt/global/core/plugin/type';
 import { MongoTeamInstalledPlugin } from '../../plugin/schema/teamInstalledPluginSchema';
+import { getLocalSystemTools } from './localSystemTools';
 
 type ChildAppType = AppToolTemplateItemType & {
   teamId?: string;
@@ -599,7 +600,7 @@ export const refreshSystemTools = async (): Promise<AppToolTemplateItemType[]> =
     };
   };
 
-  const tools = await APIGetSystemToolList();
+  const [tools, localTools] = await Promise.all([APIGetSystemToolList(), getLocalSystemTools()]);
 
   // 从数据库里加载插件配置进行替换
   const systemToolsArray = await MongoSystemTool.find({}).lean();
@@ -642,11 +643,28 @@ export const refreshSystemTools = async (): Promise<AppToolTemplateItemType[]> =
     };
   });
 
+  const formatLocalTools = localTools.map<AppToolTemplateItemType>((item) => {
+    const dbPluginConfig = systemTools.get(item.id);
+
+    return {
+      ...item,
+      status: dbPluginConfig?.status ?? item.status ?? PluginStatusEnum.Normal,
+      defaultInstalled: dbPluginConfig?.defaultInstalled ?? item.defaultInstalled ?? true,
+      hasSystemSecret: !!dbPluginConfig?.inputListVal,
+      inputListVal: dbPluginConfig?.inputListVal ?? item.inputListVal,
+      originCost: dbPluginConfig?.originCost ?? item.originCost ?? 0,
+      currentCost: dbPluginConfig?.currentCost ?? item.currentCost ?? 0,
+      systemKeyCost: dbPluginConfig?.systemKeyCost ?? item.systemKeyCost ?? 0,
+      hasTokenFee: dbPluginConfig?.hasTokenFee ?? item.hasTokenFee ?? false,
+      pluginOrder: dbPluginConfig?.pluginOrder ?? item.pluginOrder
+    };
+  });
+
   const dbPlugins = systemToolsArray
     .filter((item) => item.customConfig?.associatedPluginId)
     .map((item) => workflowToolFormat(item));
 
-  const concatTools = [...formatTools, ...dbPlugins];
+  const concatTools = [...formatTools, ...formatLocalTools, ...dbPlugins];
   concatTools.sort((a, b) => (a.pluginOrder ?? 999) - (b.pluginOrder ?? 999));
 
   return concatTools;

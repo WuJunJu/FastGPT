@@ -11,7 +11,7 @@ import {
 } from '@fastgpt/global/core/workflow/runtime/utils';
 import { type TUpdateListItem } from '@fastgpt/global/core/workflow/template/system/variableUpdate/type';
 import { type ModuleDispatchProps } from '@fastgpt/global/core/workflow/runtime/type';
-import { runtimeSystemVar2StoreType } from '../utils';
+import { getRemovedWorkflowVariables, runtimeSystemVar2StoreType } from '../utils';
 import { isValidReferenceValue } from '@fastgpt/global/core/workflow/utils';
 import { valueTypeFormat } from '@fastgpt/global/core/workflow/runtime/utils';
 import { parseUrlToFileType } from '@fastgpt/global/common/file/tools';
@@ -107,7 +107,10 @@ export const dispatchUpdateVariable = async (props: Props): Promise<Response> =>
       data: runtimeSystemVar2StoreType({
         variables,
         cloneVariables,
-        removeObj: externalProvider.externalWorkflowVariables,
+        removeObj: getRemovedWorkflowVariables({
+          variables,
+          externalWorkflowVariables: externalProvider.externalWorkflowVariables
+        }),
         userVariablesConfigs: chatConfig?.variables
       })
     });

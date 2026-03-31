@@ -13,6 +13,7 @@ import { sliceStrStartEnd } from '@fastgpt/global/common/string/tools';
 import { ChatRoleEnum } from '@fastgpt/global/core/chat/constants';
 import { toolValueTypeList, valueTypeJsonSchemaMap } from '@fastgpt/global/core/workflow/constants';
 import { runAgentCall } from '../../../../ai/llm/agentCall';
+import { getToolParamDescription } from './schema';
 
 export const runToolCall = async (props: DispatchToolModuleProps): Promise<RunToolResponse> => {
   const { messages, toolNodes, toolModel, childrenInteractiveParams, ...workflowProps } = props;
@@ -71,7 +72,7 @@ export const runToolCall = async (props: DispatchToolModuleProps): Promise<RunTo
 
       properties[item.key] = {
         ...jsonSchema,
-        description: item.toolDescription || '',
+        description: getToolParamDescription(item),
         enum: item.enum?.split('\n').filter(Boolean) || undefined
       };
     });

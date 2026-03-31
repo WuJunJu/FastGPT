@@ -141,13 +141,14 @@ export const dispatchReadFiles = async (props: Props): Promise<Response> => {
               fileId,
               url: file.url,
               name: file.name || 'Unnamed',
-              extraIds: [file.key]
+              extraIds: [file.key, file.fileId]
             });
-          } else if (file.key) {
+          } else if (file.key || file.fileId) {
             addFileToMap({
-              fileId: file.key,
+              fileId: file.fileId || file.key,
               url: file.url,
-              name: file.name || 'Unnamed'
+              name: file.name || 'Unnamed',
+              extraIds: [file.key, file.fileId]
             });
           }
         }
@@ -171,7 +172,7 @@ export const dispatchReadFiles = async (props: Props): Promise<Response> => {
                 fileId,
                 url: valueItem.file.url,
                 name: valueItem.file.name || 'Unnamed',
-                extraIds: [valueItem.file.key]
+                extraIds: [valueItem.file.key, valueItem.file.fileId]
               });
             }
           }

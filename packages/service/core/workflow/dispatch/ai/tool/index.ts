@@ -33,6 +33,7 @@ import type { FlowNodeInputItemType } from '@fastgpt/global/core/workflow/type/i
 import type { McpToolDataType } from '@fastgpt/global/core/app/tool/mcpTool/type';
 import type { JSONSchemaInputType } from '@fastgpt/global/core/app/jsonschema';
 import { getFileS3Key } from '../../../../../common/s3/utils';
+import { isVisibleToolParamInput } from './schema';
 
 type Response = DispatchNodeResultType<{
   [NodeOutputKeyEnum.answerText]: string;
@@ -88,7 +89,7 @@ export const dispatchRunTools = async (props: DispatchToolModuleProps): Promise<
         // Raw json schema(MCP tool)
         let jsonSchema: JSONSchemaInputType | undefined = undefined;
         tool?.inputs.forEach((input) => {
-          if (input.toolDescription) {
+          if (isVisibleToolParamInput(input)) {
             toolParams.push(input);
           }
 

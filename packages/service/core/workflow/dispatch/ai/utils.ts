@@ -126,6 +126,7 @@ export function checkFileTokenExpired(url: string): boolean {
  * 获取文件标识，优先 fileId，其次 key，再次 URL 路径
  */
 const getFileIdentifier = (file: NonNullable<UserChatItemValueItemType['file']>): string => {
+  if (file.fileId) return file.fileId;
   const idFromUrl = extractFileIdFromUrl(file.url);
   if (idFromUrl) return idFromUrl;
   if (file.key) return file.key;

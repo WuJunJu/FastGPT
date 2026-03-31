@@ -43,7 +43,12 @@ import type { ChatNodeUsageType } from '@fastgpt/global/support/wallet/bill/type
 import { addLog } from '../../../common/system/log';
 import { surrenderProcess } from '../../../common/system/tools';
 import type { DispatchFlowResponse, WorkflowDebugResponse } from './type';
-import { rewriteRuntimeWorkFlow, runtimeSystemVar2StoreType } from './utils';
+import {
+  getRemovedWorkflowVariables,
+  getTransientWorkflowVariables,
+  rewriteRuntimeWorkFlow,
+  runtimeSystemVar2StoreType
+} from './utils';
 import { getHandleId } from '@fastgpt/global/core/workflow/utils';
 import { callbackMap } from './constants';
 import { anyValueDecrypt } from '../../../common/secret/utils';
@@ -150,8 +155,10 @@ export async function dispatchWorkFlow({
 
   // Get default variables
   const cloneVariables = clone(data.variables);
+  const transientVariables = getTransientWorkflowVariables(data.variables);
   const defaultVariables = {
     ...externalProvider.externalWorkflowVariables,
+    ...transientVariables,
     ...(await getSystemVariables({
       ...data,
       query,
@@ -233,7 +240,10 @@ export const runWorkflow = async (data: RunWorkflowProps): Promise<DispatchFlowR
       [DispatchNodeResponseKeyEnum.newVariables]: runtimeSystemVar2StoreType({
         variables,
         cloneVariables,
-        removeObj: externalProvider.externalWorkflowVariables,
+        removeObj: getRemovedWorkflowVariables({
+          variables,
+          externalWorkflowVariables: externalProvider.externalWorkflowVariables
+        }),
         userVariablesConfigs: data.chatConfig?.variables
       }),
       durationSeconds: 0
@@ -1066,7 +1076,10 @@ export const runWorkflow = async (data: RunWorkflowProps): Promise<DispatchFlowR
     [DispatchNodeResponseKeyEnum.newVariables]: runtimeSystemVar2StoreType({
       variables,
       cloneVariables,
-      removeObj: externalProvider.externalWorkflowVariables,
+      removeObj: getRemovedWorkflowVariables({
+        variables,
+        externalWorkflowVariables: externalProvider.externalWorkflowVariables
+      }),
       userVariablesConfigs: data.chatConfig?.variables
     }),
     [DispatchNodeResponseKeyEnum.memories]:
