@@ -36,11 +36,15 @@ describe('localSystemToolResponses', () => {
     const result = summarizeExecToolResponse({
       running: true,
       completed: false,
+      terminalId: 'exec-123',
+      nextOffset: 42,
       outputText: 'build step 1\nbuild step 2',
       actionHint: 'Call Continue Command to wait longer or Stop Command to terminate it.'
     });
 
     expect(result).toContain('still running');
+    expect(result).toContain('terminalId: exec-123');
+    expect(result).toContain('nextOffset: 42');
     expect(result).toContain('build step 1');
     expect(result).toContain('Continue Command');
   });

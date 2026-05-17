@@ -1112,6 +1112,8 @@ const runExecTool = async ({
     exitCode: output.exitCode ?? undefined,
     timedOut: output.timedOut,
     actionHint: output.actionHint,
+    terminalId: output.terminalId,
+    nextOffset: output.nextOffset,
     outputText: output.outputText,
     stdout: output.stdout,
     stderr: output.stderr
@@ -1338,6 +1340,8 @@ export const runLocalSystemTool = async ({
       exitCode: output.exitCode ?? undefined,
       timedOut: output.timedOut,
       actionHint: output.actionHint,
+      terminalId: output.terminalId,
+      nextOffset: output.nextOffset,
       outputText: output.outputText,
       stdout: output.stdout,
       stderr: output.stderr
@@ -1378,6 +1382,8 @@ export const runLocalSystemTool = async ({
       exitCode: output.exitCode ?? undefined,
       timedOut: output.timedOut,
       actionHint: output.signal ? `stop signal sent: ${output.signal}` : undefined,
+      terminalId: output.terminalId,
+      nextOffset: output.nextOffset,
       outputText: output.outputText,
       stdout: output.stdout,
       stderr: output.stderr

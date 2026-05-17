@@ -141,6 +141,8 @@ export const summarizeExecToolResponse = ({
   exitCode,
   timedOut,
   actionHint,
+  terminalId,
+  nextOffset,
   outputText,
   stdout,
   stderr
@@ -152,6 +154,8 @@ export const summarizeExecToolResponse = ({
   exitCode?: number;
   timedOut?: boolean;
   actionHint?: string;
+  terminalId?: string;
+  nextOffset?: number;
   outputText?: string;
   stdout?: string;
   stderr?: string;
@@ -166,6 +170,12 @@ export const summarizeExecToolResponse = ({
 
   if (running && !completed) {
     const sections = ['still running'];
+    if (terminalId) {
+      sections.push(`terminalId: ${terminalId}`);
+    }
+    if (Number.isFinite(Number(nextOffset))) {
+      sections.push(`nextOffset: ${Number(nextOffset)}`);
+    }
     if (truncatedStdout) {
       sections.push(truncatedStdout);
     }
