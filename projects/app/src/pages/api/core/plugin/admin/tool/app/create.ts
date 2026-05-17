@@ -33,6 +33,7 @@ async function handler(
     status,
     defaultInstalled,
     associatedPluginId,
+    toolDescription,
     userGuide,
     author
   } = req.body;
@@ -56,6 +57,7 @@ async function handler(
       name,
       avatar,
       intro,
+      toolDescription,
       version: getNanoid(),
       tags: tagIds,
       associatedPluginId,

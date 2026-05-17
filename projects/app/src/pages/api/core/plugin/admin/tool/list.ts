@@ -38,6 +38,7 @@ async function handler(
         ...item,
         name: parseI18nString(item.name, lang),
         intro: parseI18nString(item.intro, lang),
+        toolDescription: parseI18nString(item.toolDescription, lang),
         hasSecretInput: !!item.inputList,
         tags: tags
           .filter((tag) => item.tags?.includes(tag.tagId))

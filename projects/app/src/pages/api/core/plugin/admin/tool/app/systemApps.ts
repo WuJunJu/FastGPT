@@ -3,7 +3,7 @@ import { NextAPI } from '@/service/middleware/entry';
 import type { ApiRequestProps } from '@fastgpt/service/type/next';
 import { AppTypeEnum } from '@fastgpt/global/core/app/constants';
 import { replaceRegChars } from '@fastgpt/global/common/string/tools';
-import { isValidObjectId } from 'mongoose';
+import { isValidObjectId } from '@fastgpt/service/common/mongo';
 import { authSystemAdmin } from '@fastgpt/service/support/permission/user/auth';
 import type {
   GetAllSystemAppsBodyType,

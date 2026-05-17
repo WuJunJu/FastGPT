@@ -6,6 +6,7 @@ import { FlowNodeTypeEnum } from '@fastgpt/global/core/workflow/node/constant';
 import { NodeInputKeyEnum } from '@fastgpt/global/core/workflow/constants';
 import { parseI18nString } from '@fastgpt/global/common/i18n/utils';
 import type { localeType } from '@fastgpt/global/common/i18n/type';
+import { cloneDeep } from 'lodash';
 
 /* filter search result */
 export const filterSearchResultsByMaxChars = async (
@@ -54,7 +55,8 @@ export async function getSystemToolRunTimeNodeFromSystemToolset({
 
       const tool = await getSystemToolByIdAndVersionId(child.id);
 
-      const inputs = tool.inputs ?? [];
+      const inputs = cloneDeep(tool.inputs ?? []);
+      const outputs = cloneDeep(tool.outputs ?? []);
       if (toolsetInputConfig?.value) {
         const configInput = inputs.find((item) => item.key === NodeInputKeyEnum.systemInputConfig);
         if (configInput) {
@@ -65,7 +67,8 @@ export async function getSystemToolRunTimeNodeFromSystemToolset({
       return {
         ...tool,
         inputs,
-        outputs: tool.outputs ?? [],
+        originalInputs: cloneDeep(inputs),
+        outputs,
         name: toolListItem?.name || parseI18nString(tool.name, lang),
         intro: toolListItem?.description || parseI18nString(tool.intro, lang),
         flowNodeType: FlowNodeTypeEnum.tool,

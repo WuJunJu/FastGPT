@@ -14,7 +14,7 @@ export const updateToolInputValue = ({
 }) => {
   return inputs.map((input) => ({
     ...input,
-    value: params[input.key] ?? input.value
+    value: Object.prototype.hasOwnProperty.call(params, input.key) ? params[input.key] : input.value
   }));
 };
 
@@ -89,7 +89,11 @@ export const initToolNodes = (
     if (entryNodeIds.includes(node.nodeId)) {
       node.isEntry = true;
       if (startParams) {
-        node.inputs = updateToolInputValue({ params: startParams, inputs: node.inputs });
+        const baseInputs = node.originalInputs ?? node.inputs;
+        node.inputs = updateToolInputValue({
+          params: startParams,
+          inputs: baseInputs.map((input) => ({ ...input }))
+        });
       }
     }
   });

@@ -77,6 +77,7 @@ type NodeResponseType = DispatchNodeResultType<{
 }>;
 type NodeResponseCompleteType = Omit<NodeResponseType, 'responseData'> & {
   [DispatchNodeResponseKeyEnum.nodeResponse]?: ChatHistoryItemResType;
+  [DispatchNodeResponseKeyEnum.toolResponseForUI]?: any;
 };
 
 // Run workflow
@@ -281,6 +282,7 @@ export const runWorkflow = async (data: RunWorkflowProps): Promise<DispatchFlowR
     chatAssistantResponse: AIChatItemValueItemType[] = []; // The value will be returned to the user
     chatNodeUsages: ChatNodeUsageType[] = [];
     toolRunResponse: ToolRunResponseItemType; // Run with tool mode. Result will response to tool node.
+    toolRunResponseForUI: any; // Structured tool payload reserved for external frontend rendering.
     // 记录交互节点，交互节点需要在工作流完全结束后再进行计算
     nodeInteractiveResponse:
       | {
@@ -669,6 +671,7 @@ export const runWorkflow = async (data: RunWorkflowProps): Promise<DispatchFlowR
         responseData,
         nodeDispatchUsages,
         toolResponses,
+        toolResponseForUI,
         assistantResponses,
         rewriteHistories,
         runTimes = 1,
@@ -713,6 +716,16 @@ export const runWorkflow = async (data: RunWorkflowProps): Promise<DispatchFlowR
             Object.keys(toolResponses).length > 0)
         ) {
           this.toolRunResponse = toolResponses;
+        }
+
+        if (
+          (toolResponseForUI !== undefined && toolResponseForUI !== null) ||
+          (Array.isArray(toolResponseForUI) && toolResponseForUI.length > 0) ||
+          (!Array.isArray(toolResponseForUI) &&
+            typeof toolResponseForUI === 'object' &&
+            Object.keys(toolResponseForUI).length > 0)
+        ) {
+          this.toolRunResponseForUI = toolResponseForUI;
         }
 
         // Histories store
@@ -1073,6 +1086,7 @@ export const runWorkflow = async (data: RunWorkflowProps): Promise<DispatchFlowR
       workflowQueue.chatAssistantResponse
     ),
     [DispatchNodeResponseKeyEnum.toolResponses]: workflowQueue.toolRunResponse,
+    [DispatchNodeResponseKeyEnum.toolResponseForUI]: workflowQueue.toolRunResponseForUI,
     [DispatchNodeResponseKeyEnum.newVariables]: runtimeSystemVar2StoreType({
       variables,
       cloneVariables,

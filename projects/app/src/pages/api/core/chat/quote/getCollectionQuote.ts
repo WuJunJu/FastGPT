@@ -10,7 +10,7 @@ import {
   type LinkedListResponse,
   type LinkedPaginationProps
 } from '@fastgpt/web/common/fetch/type';
-import { type FilterQuery, Types } from 'mongoose';
+import { type FilterQuery, Types } from '@fastgpt/service/common/mongo';
 import { quoteDataFieldSelector } from '@/service/core/chat/constants';
 import { processChatTimeFilter } from '@/service/core/chat/utils';
 import { ChatErrEnum } from '@fastgpt/global/common/error/code/chat';

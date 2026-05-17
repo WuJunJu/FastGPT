@@ -3,8 +3,20 @@ FROM node:20.14.0-alpine AS maindeps
 WORKDIR /app
 
 ARG proxy
+ARG alpine_mirror=https://dl-cdn.alpinelinux.org
 
-RUN [ -z "$proxy" ] || sed -i 's/dl-cdn.alpinelinux.org/mirrors.ustc.edu.cn/g' /etc/apk/repositories
+ENV HTTP_PROXY= \
+    HTTPS_PROXY= \
+    ALL_PROXY= \
+    http_proxy= \
+    https_proxy= \
+    all_proxy= \
+    NO_PROXY= \
+    no_proxy=
+
+RUN if [ "${alpine_mirror}" != "https://dl-cdn.alpinelinux.org" ]; then \
+      sed -i "s|https://dl-cdn.alpinelinux.org|${alpine_mirror}|g" /etc/apk/repositories; \
+    fi
 RUN apk add --no-cache libc6-compat && npm install -g pnpm@9.4.0
 
 # copy packages and one project
@@ -28,6 +40,16 @@ WORKDIR /app
 ARG proxy
 ARG base_url
 ARG NEXT_DISABLE_ESLINT=1
+ARG alpine_mirror=https://dl-cdn.alpinelinux.org
+
+ENV HTTP_PROXY= \
+    HTTPS_PROXY= \
+    ALL_PROXY= \
+    http_proxy= \
+    https_proxy= \
+    all_proxy= \
+    NO_PROXY= \
+    no_proxy=
 
 # copy common node_modules and one project node_modules
 COPY package.json pnpm-workspace.yaml .npmrc tsconfig.json ./
@@ -36,7 +58,9 @@ COPY --from=maindeps /app/packages ./packages
 COPY ./projects/app ./projects/app
 COPY --from=maindeps /app/projects/app/node_modules ./projects/app/node_modules
 
-RUN [ -z "$proxy" ] || sed -i 's/dl-cdn.alpinelinux.org/mirrors.ustc.edu.cn/g' /etc/apk/repositories
+RUN if [ "${alpine_mirror}" != "https://dl-cdn.alpinelinux.org" ]; then \
+      sed -i "s|https://dl-cdn.alpinelinux.org|${alpine_mirror}|g" /etc/apk/repositories; \
+    fi
 
 RUN apk add --no-cache libc6-compat && npm install -g pnpm@9.4.0
 
@@ -51,12 +75,24 @@ WORKDIR /app
 
 ARG proxy
 ARG base_url
+ARG alpine_mirror=https://dl-cdn.alpinelinux.org
+
+ENV HTTP_PROXY= \
+    HTTPS_PROXY= \
+    ALL_PROXY= \
+    http_proxy= \
+    https_proxy= \
+    all_proxy= \
+    NO_PROXY= \
+    no_proxy=
 
 # create user and use it
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
 
-RUN [ -z "$proxy" ] || sed -i 's/dl-cdn.alpinelinux.org/mirrors.ustc.edu.cn/g' /etc/apk/repositories
+RUN if [ "${alpine_mirror}" != "https://dl-cdn.alpinelinux.org" ]; then \
+      sed -i "s|https://dl-cdn.alpinelinux.org|${alpine_mirror}|g" /etc/apk/repositories; \
+    fi
 RUN apk add --no-cache curl ca-certificates \
   && update-ca-certificates
 

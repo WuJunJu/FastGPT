@@ -7,6 +7,7 @@ export const AdminSystemToolListItemSchema = SystemToolBasicConfigSchema.extend(
   parentId: ParentIdSchema,
   name: z.string(),
   intro: z.string().optional(),
+  toolDescription: z.string().nullish(),
   author: z.string().optional(),
   avatar: z.string().optional(),
   tags: z.array(z.string()).nullish(),

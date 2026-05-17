@@ -39,6 +39,7 @@ export type DispatchFlowResponse = {
   [DispatchNodeResponseKeyEnum.memories]?: Record<string, any>;
   [DispatchNodeResponseKeyEnum.newVariables]: Record<string, string>;
   durationSeconds: number;
+  [DispatchNodeResponseKeyEnum.toolResponseForUI]?: any;
 };
 
 export type WorkflowResponseType = ({

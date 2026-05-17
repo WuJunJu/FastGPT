@@ -25,6 +25,7 @@ import { getMCPChildren } from '../../../core/app/mcp';
 import { getSystemToolRunTimeNodeFromSystemToolset } from '../utils';
 import type { localeType } from '@fastgpt/global/common/i18n/type';
 import type { HttpToolConfigType } from '@fastgpt/global/core/app/type';
+import { cloneDeep } from 'lodash';
 
 export const getWorkflowResponseWrite = ({
   res,
@@ -235,6 +236,12 @@ export const rewriteRuntimeWorkFlow = async ({
   }
 
   const nodeIdsToRemove = new Set<string>();
+  const withOriginalInputs = (node: RuntimeNodeItemType) => {
+    if (node.flowNodeType === FlowNodeTypeEnum.tool && !node.originalInputs) {
+      node.originalInputs = cloneDeep(node.inputs ?? []);
+    }
+    return node;
+  };
 
   for (const toolSetNode of toolSetNodes) {
     nodeIdsToRemove.add(toolSetNode.nodeId);
@@ -262,7 +269,7 @@ export const rewriteRuntimeWorkFlow = async ({
         lang
       });
       children.forEach((node) => {
-        nodes.push(node);
+        nodes.push(withOriginalInputs(node));
         pushEdges(node.nodeId);
       });
     } else if (mcpToolsetVal) {
@@ -280,10 +287,12 @@ export const rewriteRuntimeWorkFlow = async ({
         });
         newToolNode.nodeId = `${parentId}${index}`; // ID 不能随机，否则下次生成时候就和之前的记录对不上
 
-        nodes.push({
-          ...newToolNode,
-          name: `${toolSetNode.name}/${tool.name}`
-        });
+        nodes.push(
+          withOriginalInputs({
+            ...newToolNode,
+            name: `${toolSetNode.name}/${tool.name}`
+          })
+        );
         pushEdges(newToolNode.nodeId);
       });
     } else if (httpToolsetVal) {
@@ -299,7 +308,7 @@ export const rewriteRuntimeWorkFlow = async ({
           parentId
         });
 
-        nodes.push(newToolNode);
+        nodes.push(withOriginalInputs(newToolNode));
         pushEdges(newToolNode.nodeId);
       });
     }

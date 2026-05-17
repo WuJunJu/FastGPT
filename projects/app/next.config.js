@@ -9,12 +9,16 @@ const withBundleAnalyzer = require('@next/bundle-analyzer')({
 const isDev = process.env.NODE_ENV === 'development';
 const envBasePath = process.env.NEXT_PUBLIC_BASE_URL;
 const basePath = envBasePath && envBasePath.startsWith('/') ? envBasePath : undefined;
+const ignoreBuildTypeErrors = process.env.NEXT_IGNORE_BUILD_ERRORS === 'true';
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   basePath,
   i18n,
   output: 'standalone',
+  typescript: {
+    ignoreBuildErrors: ignoreBuildTypeErrors
+  },
   reactStrictMode: isDev ? false : true,
   compress: true,
   // 禁用 source map（可选，根据需要）

@@ -53,7 +53,11 @@ import { getCachedData } from '../../../common/cache';
 import { SystemCacheKeyEnum } from '../../../common/cache/type';
 import { PluginStatusEnum } from '@fastgpt/global/core/plugin/type';
 import { MongoTeamInstalledPlugin } from '../../plugin/schema/teamInstalledPluginSchema';
-import { getLocalSystemTools } from './localSystemTools';
+import {
+  getLocalSystemToolById,
+  getLocalSystemToolIds,
+  getLocalSystemTools
+} from './localSystemTools';
 
 type ChildAppType = AppToolTemplateItemType & {
   teamId?: string;
@@ -61,6 +65,42 @@ type ChildAppType = AppToolTemplateItemType & {
   workflow?: WorkflowTemplateBasicType;
   versionLabel?: string; // Auto computed
   isLatestVersion?: boolean; // Auto computed
+};
+
+const { execShellToolId: hivechatExecShellToolId, legacyExecToolId: hivechatLegacyExecToolId } =
+  getLocalSystemToolIds();
+
+const getCompatSystemToolId = (pluginId: string) => {
+  if (pluginId === hivechatLegacyExecToolId) {
+    return hivechatExecShellToolId;
+  }
+  return pluginId;
+};
+
+const transformLegacyToolVersionInputs = (tool: AppToolTemplateItemType) => {
+  if (tool.id !== hivechatLegacyExecToolId || !tool.versionList?.length) {
+    return tool;
+  }
+
+  const shellTool = getLocalSystemToolById(hivechatExecShellToolId);
+  if (!shellTool?.versionList?.length) {
+    return tool;
+  }
+
+  const shellVersion = shellTool.versionList[0];
+
+  return {
+    ...tool,
+    name: shellTool.name,
+    intro: shellTool.intro,
+    toolDescription:
+      'Compatibility mapping for older workflows. This legacy Exec node now runs with Exec Shell semantics.',
+    versionList: tool.versionList.map((version) => ({
+      ...version,
+      inputs: shellVersion.inputs.map((input) => ({ ...input })),
+      outputs: shellVersion.outputs.map((output) => ({ ...output }))
+    }))
+  };
 };
 
 export const getSystemTools = () => getCachedData(SystemCacheKeyEnum.systemTool);
@@ -115,7 +155,8 @@ export const getSystemToolByIdAndVersionId = async (
   pluginId: string,
   versionId?: string
 ): Promise<ChildAppType> => {
-  const tool = await getSystemToolById(pluginId);
+  const requestedPluginId = pluginId;
+  const tool = transformLegacyToolVersionInputs(await getSystemToolById(pluginId));
 
   // App type system tool
   if (tool.associatedPluginId) {
@@ -198,6 +239,7 @@ export const getSystemToolByIdAndVersionId = async (
     ...tool,
     inputs: version.inputs ?? [],
     outputs: version.outputs ?? [],
+    id: requestedPluginId,
     version: versionId ? version?.value : '',
     versionLabel: versionId ? version?.value : '',
     isLatestVersion: !version || !lastVersion || version.value === lastVersion?.value
@@ -619,10 +661,10 @@ export const refreshSystemTools = async (): Promise<AppToolTemplateItemType[]> =
       name: item.name,
       avatar: item.avatar,
       intro: item.description,
-      toolDescription: item.toolDescription,
+      toolDescription: dbPluginConfig?.customConfig?.toolDescription ?? item.toolDescription,
       author: item.author,
       courseUrl: item.courseUrl,
-      instructions: dbPluginConfig?.customConfig?.userGuide,
+      userGuide: dbPluginConfig?.customConfig?.userGuide,
       tags: item.tags,
       workflow: {
         nodes: [],
@@ -648,6 +690,8 @@ export const refreshSystemTools = async (): Promise<AppToolTemplateItemType[]> =
 
     return {
       ...item,
+      toolDescription: dbPluginConfig?.customConfig?.toolDescription ?? item.toolDescription,
+      userGuide: dbPluginConfig?.customConfig?.userGuide ?? item.userGuide,
       status: dbPluginConfig?.status ?? item.status ?? PluginStatusEnum.Normal,
       defaultInstalled: dbPluginConfig?.defaultInstalled ?? item.defaultInstalled ?? true,
       hasSystemSecret: !!dbPluginConfig?.inputListVal,
@@ -672,10 +716,17 @@ export const refreshSystemTools = async (): Promise<AppToolTemplateItemType[]> =
 
 export const getSystemToolById = async (id: string): Promise<AppToolTemplateItemType> => {
   const { pluginId } = splitCombineToolId(id);
+  const compatPluginId = getCompatSystemToolId(pluginId);
   const tools = await getSystemTools();
-  const tool = tools.find((item) => item.id === pluginId);
+  const tool = tools.find((item) => item.id === compatPluginId);
   if (tool) {
-    return cloneDeep(tool);
+    const clonedTool = cloneDeep(tool);
+    return compatPluginId === hivechatLegacyExecToolId
+      ? clonedTool
+      : {
+          ...clonedTool,
+          id: pluginId
+        };
   }
   return Promise.reject(PluginErrEnum.unExist);
 };

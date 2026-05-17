@@ -28,9 +28,21 @@ describe('localSystemToolResponses', () => {
       stderr: 'Traceback...'
     });
 
-    expect(result).toContain('Command: python3 bad.py');
-    expect(result).toContain('Exit code: 1');
-    expect(result).toContain('Stderr:\nTraceback...');
+    expect(result).toContain('exit 1');
+    expect(result).toContain('Traceback...');
+  });
+
+  it('tells the agent to continue or stop when a command is still running', () => {
+    const result = summarizeExecToolResponse({
+      running: true,
+      completed: false,
+      outputText: 'build step 1\nbuild step 2',
+      actionHint: 'Call Continue Command to wait longer or Stop Command to terminate it.'
+    });
+
+    expect(result).toContain('still running');
+    expect(result).toContain('build step 1');
+    expect(result).toContain('Continue Command');
   });
 
   it('does not expose base64 when summarizing read-file responses', () => {
@@ -41,7 +53,7 @@ describe('localSystemToolResponses', () => {
       contentText: 'hello'
     });
 
-    expect(result).toBe('File input/demo.txt:\nhello');
+    expect(result).toBe('Read input/demo.txt (5 B)\nhello');
   });
 
   it('formats directory listings as concise text', () => {
@@ -53,9 +65,9 @@ describe('localSystemToolResponses', () => {
       ]
     });
 
-    expect(result).toContain('Directory input:');
-    expect(result).toContain('[dir] input/subdir');
-    expect(result).toContain('[file] input/a.txt (12 bytes)');
+    expect(result).toContain('input: 1 file, 1 dir');
+    expect(result).toContain('input/subdir/');
+    expect(result).toContain('input/a.txt');
   });
 
   it('summarizes file writes without leaking raw payloads', () => {
@@ -65,6 +77,6 @@ describe('localSystemToolResponses', () => {
       degraded: false
     });
 
-    expect(result).toBe('Wrote src/main.py.');
+    expect(result).toBe('Wrote src/main.py');
   });
 });

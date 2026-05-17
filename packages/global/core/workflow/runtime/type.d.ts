@@ -116,6 +116,7 @@ export type RuntimeNodeItemType = {
   version?: string;
 
   inputs: FlowNodeInputItemType[];
+  originalInputs?: FlowNodeInputItemType[];
   outputs: FlowNodeOutputItemType[];
 
   pluginId?: string; // workflow id / plugin id

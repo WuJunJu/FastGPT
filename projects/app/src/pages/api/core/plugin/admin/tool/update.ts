@@ -7,6 +7,7 @@ import { refreshVersionKey } from '@fastgpt/service/common/cache';
 import { SystemCacheKeyEnum } from '@fastgpt/service/common/cache/type';
 import { authSystemAdmin } from '@fastgpt/service/support/permission/user/auth';
 import type { UpdateToolBodyType } from '@fastgpt/global/openapi/core/plugin/admin/tool/api';
+import { AppToolSourceEnum } from '@fastgpt/global/core/app/tool/constants';
 
 export type updateToolQuery = {};
 
@@ -22,6 +23,9 @@ async function handler(
   const { pluginId, ...updateFields } = req.body;
 
   const plugin = await MongoSystemTool.findOne({ pluginId });
+  const isAppTool =
+    pluginId.startsWith(`${AppToolSourceEnum.commercial}-`) ||
+    !!plugin?.customConfig?.associatedPluginId;
 
   // 基础更新字段
   const baseUpdateFields = {
@@ -36,11 +40,13 @@ async function handler(
   };
 
   // 如果是自定义插件,需要更新 customConfig
-  if (plugin && plugin.customConfig) {
+  if (isAppTool && plugin?.customConfig) {
     const isUpdateVersion =
       plugin.customConfig.name !== updateFields.name ||
       plugin.customConfig.avatar !== updateFields.avatar ||
-      plugin.customConfig.intro !== updateFields.intro;
+      plugin.customConfig.intro !== updateFields.intro ||
+      plugin.customConfig.toolDescription !== updateFields.toolDescription ||
+      plugin.customConfig.userGuide !== updateFields.userGuide;
 
     await MongoSystemTool.findOneAndUpdate(
       { pluginId },
@@ -50,6 +56,7 @@ async function handler(
           name: updateFields.name,
           avatar: updateFields.avatar,
           intro: updateFields.intro,
+          toolDescription: updateFields.toolDescription ?? undefined,
           version: isUpdateVersion ? getNanoid() : plugin.customConfig.version,
           tags: updateFields.tagIds,
           associatedPluginId: updateFields.associatedPluginId,
@@ -61,7 +68,18 @@ async function handler(
   } else {
     // 系统插件只更新基础字段, 如果有 child，需要更新 child
     await mongoSessionRun(async (session) => {
-      await MongoSystemTool.updateOne({ pluginId }, baseUpdateFields, { upsert: true, session });
+      await MongoSystemTool.updateOne(
+        { pluginId },
+        {
+          ...baseUpdateFields,
+          customConfig: {
+            ...(plugin?.customConfig || {}),
+            toolDescription: updateFields.toolDescription ?? undefined,
+            userGuide: updateFields.userGuide ?? undefined
+          }
+        },
+        { upsert: true, session }
+      );
 
       for await (const tool of updateFields.childTools || []) {
         await MongoSystemTool.updateOne(

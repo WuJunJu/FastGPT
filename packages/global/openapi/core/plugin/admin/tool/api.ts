@@ -54,6 +54,7 @@ export const UpdateToolBodySchema = z.object({
   intro: z.string().optional(),
   tagIds: z.array(z.string()).nullish(),
   associatedPluginId: z.string().optional(),
+  toolDescription: z.string().nullish(),
   userGuide: z.string().nullish(),
   author: z.string().optional()
 });

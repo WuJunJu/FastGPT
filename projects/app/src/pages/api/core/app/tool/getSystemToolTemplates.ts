@@ -45,7 +45,7 @@ async function handler(
       name: parseI18nString(tool.name, lang),
       intro: parseI18nString(tool.intro ?? '', lang),
       instructions: parseI18nString(tool.userGuide ?? '', lang),
-      toolDescription: tool.toolDescription,
+      toolDescription: parseI18nString(tool.toolDescription ?? '', lang),
       tags: tool.tags
     }))
     .filter((item) => {

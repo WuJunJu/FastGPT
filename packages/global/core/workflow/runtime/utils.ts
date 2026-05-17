@@ -21,6 +21,7 @@ import { isValidReferenceValueFormat } from '../utils';
 import type { RuntimeEdgeItemType, RuntimeNodeItemType } from './type';
 import { isSecretValue } from '../../../common/secret/utils';
 import { isChildInteractive } from '../template/system/interactive/constants';
+import { cloneDeep } from 'lodash';
 
 export const extractDeepestInteractive = (
   interactive: WorkflowInteractiveResponseType
@@ -249,6 +250,8 @@ export const storeNodes2RuntimeNodes = (
 ): RuntimeNodeItemType[] => {
   return (
     nodes.map<RuntimeNodeItemType>((node) => {
+      const inputs = cloneDeep(node.inputs);
+      const outputs = cloneDeep(node.outputs);
       return {
         nodeId: node.nodeId,
         name: node.name,
@@ -258,8 +261,9 @@ export const storeNodes2RuntimeNodes = (
         flowNodeType: node.flowNodeType,
         showStatus: node.showStatus,
         isEntry: entryNodeIds.includes(node.nodeId),
-        inputs: node.inputs,
-        outputs: node.outputs,
+        inputs,
+        originalInputs: cloneDeep(inputs),
+        outputs,
         pluginId: node.pluginId,
         version: node.version,
         toolConfig: node.toolConfig,

@@ -54,6 +54,8 @@ async function handler(
     ...systemTool,
     name: parseI18nString(systemTool.name, lang),
     intro: parseI18nString(systemTool.intro, lang),
+    toolDescription: parseI18nString(systemTool.toolDescription, lang),
+    userGuide: parseI18nString(systemTool.userGuide, lang),
     inputListVal: systemDbTool?.inputListVal,
     childTools: childTools.map((tool) => {
       return ToolsetChildSchema.parse({

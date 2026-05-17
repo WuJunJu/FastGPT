@@ -1,6 +1,9 @@
 import type { ChatCompletionTool } from '@fastgpt/global/core/ai/type';
 import { responseWriteController } from '../../../../../common/response';
-import { SseResponseEventEnum } from '@fastgpt/global/core/workflow/runtime/constants';
+import {
+  DispatchNodeResponseKeyEnum,
+  SseResponseEventEnum
+} from '@fastgpt/global/core/workflow/runtime/constants';
 import { textAdaptGptResponse } from '@fastgpt/global/core/workflow/runtime/utils';
 import { runWorkflow } from '../../index';
 import type { DispatchToolModuleProps, RunToolResponse, ToolNodeItemType } from './type';
@@ -209,6 +212,7 @@ export const runToolCall = async (props: DispatchToolModuleProps): Promise<RunTo
 
       // Format tool response
       const stringToolResponse = formatToolResponse(toolRunResponse.toolResponses);
+      const hivechatDetails = toolRunResponse[DispatchNodeResponseKeyEnum.toolResponseForUI];
 
       workflowStreamResponse?.({
         event: SseResponseEventEnum.toolResponse,
@@ -218,7 +222,8 @@ export const runToolCall = async (props: DispatchToolModuleProps): Promise<RunTo
             toolName: '',
             toolAvatar: '',
             params: '',
-            response: sliceStrStartEnd(stringToolResponse, 5000, 5000)
+            response: sliceStrStartEnd(stringToolResponse, 5000, 5000),
+            ...(hivechatDetails ? { hivechatDetails } : {})
           }
         }
       });
@@ -258,6 +263,7 @@ export const runToolCall = async (props: DispatchToolModuleProps): Promise<RunTo
       });
       // console.dir(runtimeEdges, { depth: null });
       const stringToolResponse = formatToolResponse(toolRunResponse.toolResponses);
+      const hivechatDetails = toolRunResponse[DispatchNodeResponseKeyEnum.toolResponseForUI];
 
       workflowStreamResponse?.({
         event: SseResponseEventEnum.toolResponse,
@@ -267,7 +273,8 @@ export const runToolCall = async (props: DispatchToolModuleProps): Promise<RunTo
             toolName: '',
             toolAvatar: '',
             params: '',
-            response: sliceStrStartEnd(stringToolResponse, 5000, 5000)
+            response: sliceStrStartEnd(stringToolResponse, 5000, 5000),
+            ...(hivechatDetails ? { hivechatDetails } : {})
           }
         }
       });

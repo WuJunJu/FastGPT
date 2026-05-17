@@ -9,7 +9,7 @@ const appName = 'HiveChat Sandbox Bridge';
 const modelName = 'hivechat-sandbox-bridge';
 const displayName = 'HiveChat Sandbox Bridge';
 const outputPath = process.env.HIVECHAT_BRIDGE_OUTPUT || '/tmp/fastgpt-hivechat-bridge.json';
-const execToolId = 'systemTool-hivechat-sandbox-exec';
+const execToolId = 'systemTool-hivechat-sandbox-exec-shell';
 const execNodeId = 'sandboxExec';
 const hashPassword = (value) => crypto.createHash('sha256').update(value).digest('hex');
 const sandboxVariables = [

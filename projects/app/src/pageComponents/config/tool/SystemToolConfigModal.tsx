@@ -4,6 +4,7 @@ import {
   Button,
   HStack,
   Input,
+  Textarea,
   ModalBody,
   ModalFooter,
   Switch,
@@ -221,6 +222,30 @@ const SystemToolConfigModal = ({
                 />
               </HStack>
 
+              <Box>
+                <Box mb={2} fontSize={'sm'} fontWeight={'medium'}>
+                  {t('app:toolkit_tool_description')}
+                </Box>
+                <Textarea
+                  bg={'myGray.50'}
+                  rows={5}
+                  {...register('toolDescription')}
+                  placeholder={t('app:toolkit_tool_description_placeholder')}
+                />
+              </Box>
+
+              <Box>
+                <Box mb={2} fontSize={'sm'} fontWeight={'medium'}>
+                  {t('app:toolkit_user_guide')}
+                </Box>
+                <Textarea
+                  bg={'myGray.50'}
+                  rows={6}
+                  {...register('userGuide')}
+                  placeholder={t('app:toolkit_user_guide_placeholder')}
+                />
+              </Box>
+
               {showSystemSecretInput && (
                 <>
                   <HStack>
@@ -330,6 +355,30 @@ const SystemToolConfigModal = ({
                 }}
               />
             </HStack>
+
+            <Box>
+              <Box mb={2} fontSize={'sm'} fontWeight={'medium'}>
+                {t('app:toolkit_tool_description')}
+              </Box>
+              <Textarea
+                bg={'myGray.50'}
+                rows={5}
+                {...register('toolDescription')}
+                placeholder={t('app:toolkit_tool_description_placeholder')}
+              />
+            </Box>
+
+            <Box>
+              <Box mb={2} fontSize={'sm'} fontWeight={'medium'}>
+                {t('app:toolkit_user_guide')}
+              </Box>
+              <Textarea
+                bg={'myGray.50'}
+                rows={6}
+                {...register('userGuide')}
+                placeholder={t('app:toolkit_user_guide_placeholder')}
+              />
+            </Box>
 
             {showSystemSecretInput && (
               <>

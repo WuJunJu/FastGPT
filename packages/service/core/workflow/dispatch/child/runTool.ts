@@ -41,7 +41,9 @@ type RunToolResponse = DispatchNodeResultType<
     [key: string]: any;
   },
   Record<string, any>
->;
+> & {
+  [DispatchNodeResponseKeyEnum.toolResponseForUI]?: any;
+};
 
 export const dispatchRunTool = async (props: RunToolProps): Promise<RunToolResponse> => {
   const {
@@ -92,51 +94,56 @@ export const dispatchRunTool = async (props: RunToolProps): Promise<RunToolRespo
         : resolvedToolId;
       let answerText = '';
 
-      const res: { output?: Record<string, any>; error?: any; toolResponse?: any } =
-        isLocalSystemTool(resolvedToolId)
-          ? await runLocalSystemTool({
-              toolId: resolvedToolId,
-              inputs,
-              variables
-            })
-          : await APIRunSystemTool({
-              toolId: formatToolId,
-              inputs,
-              systemVar: {
-                user: {
-                  id: variables.userId,
-                  username: runningUserInfo.username,
-                  contact: runningUserInfo.contact,
-                  membername: runningUserInfo.memberName,
-                  teamName: runningUserInfo.teamName,
-                  teamId: runningUserInfo.teamId,
-                  name: runningUserInfo.tmbId
-                },
-                app: {
-                  id: runningAppInfo.id,
-                  name: runningAppInfo.id
-                },
-                tool: {
-                  id: formatToolId,
-                  version: version || tool.versionList?.[0]?.value || ''
-                },
-                time: variables.cTime
+      const res: {
+        output?: Record<string, any>;
+        error?: any;
+        toolResponse?: any;
+        toolResponseForUI?: any;
+      } = isLocalSystemTool(resolvedToolId)
+        ? await runLocalSystemTool({
+            toolId: resolvedToolId,
+            inputs,
+            variables
+          })
+        : await APIRunSystemTool({
+            toolId: formatToolId,
+            inputs,
+            systemVar: {
+              user: {
+                id: variables.userId,
+                username: runningUserInfo.username,
+                contact: runningUserInfo.contact,
+                membername: runningUserInfo.memberName,
+                teamName: runningUserInfo.teamName,
+                teamId: runningUserInfo.teamId,
+                name: runningUserInfo.tmbId
               },
-              onMessage: ({ type, content }) => {
-                if (workflowStreamResponse && content) {
-                  answerText += content;
-                  workflowStreamResponse({
-                    event: type as unknown as SseResponseEventEnum,
-                    data: textAdaptGptResponse({
-                      text: content
-                    })
-                  });
-                }
+              app: {
+                id: runningAppInfo.id,
+                name: runningAppInfo.id
+              },
+              tool: {
+                id: formatToolId,
+                version: version || tool.versionList?.[0]?.value || ''
+              },
+              time: variables.cTime
+            },
+            onMessage: ({ type, content }) => {
+              if (workflowStreamResponse && content) {
+                answerText += content;
+                workflowStreamResponse({
+                  event: type as unknown as SseResponseEventEnum,
+                  data: textAdaptGptResponse({
+                    text: content
+                  })
+                });
               }
-            });
+            }
+          });
 
       let result = res.output || {};
       const toolResponse = res.toolResponse ?? result;
+      const toolResponseForUI = res.toolResponseForUI;
 
       if (res.error) {
         // 适配旧版：旧版本没有catchError，部分工具会正常返回 error 字段作为响应。
@@ -147,7 +154,9 @@ export const dispatchRunTool = async (props: RunToolProps): Promise<RunToolRespo
               toolRes: res.error,
               moduleLogo: avatar
             },
-            [DispatchNodeResponseKeyEnum.toolResponses]: res.toolResponse ?? res.error
+            [DispatchNodeResponseKeyEnum.toolResponses]: res.toolResponse ?? res.error,
+            [DispatchNodeResponseKeyEnum.toolResponseForUI]:
+              res.toolResponseForUI ?? res.toolResponse ?? res.error
           };
         }
 
@@ -163,7 +172,8 @@ export const dispatchRunTool = async (props: RunToolProps): Promise<RunToolRespo
             error: res.error,
             moduleLogo: avatar
           },
-          [DispatchNodeResponseKeyEnum.toolResponses]: res.error
+          [DispatchNodeResponseKeyEnum.toolResponses]: res.error,
+          [DispatchNodeResponseKeyEnum.toolResponseForUI]: res.toolResponseForUI ?? res.error
         };
       }
 
@@ -196,6 +206,7 @@ export const dispatchRunTool = async (props: RunToolProps): Promise<RunToolRespo
           totalPoints: usagePoints
         },
         [DispatchNodeResponseKeyEnum.toolResponses]: toolResponse,
+        [DispatchNodeResponseKeyEnum.toolResponseForUI]: toolResponseForUI ?? toolResponse,
         [DispatchNodeResponseKeyEnum.nodeDispatchUsages]: [
           {
             moduleName: name,
