@@ -5,6 +5,7 @@ import type {
   FlowNodeOutputItemType
 } from '@fastgpt/global/core/workflow/type/io';
 import { initToolNodes } from '@fastgpt/service/core/workflow/dispatch/ai/tool/utils';
+import { filterToolNodeIdByEdges } from '@fastgpt/service/core/workflow/dispatch/utils';
 import { rewriteRuntimeWorkFlow } from '@fastgpt/service/core/workflow/dispatch/utils';
 import * as workflowUtils from '@fastgpt/service/core/workflow/utils';
 import { FlowNodeTypeEnum } from '@fastgpt/global/core/workflow/node/constant';
@@ -136,5 +137,47 @@ describe('rewriteRuntimeWorkFlow', () => {
 
     expect(childNode?.inputs.find((item) => item.key === 'content')?.value).toBeUndefined();
     expect(childNode?.inputs.find((item) => item.key === 'contentBase64')?.value).toBe('aGVsbG8=');
+  });
+});
+
+describe('filterToolNodeIdByEdges', () => {
+  it('does not expose manual workflow-only nodes to agent tool calls', () => {
+    const nodes: RuntimeNodeItemType[] = [
+      {
+        nodeId: 'manual-image-import',
+        name: 'HiveChat Import Image URL',
+        flowNodeType: FlowNodeTypeEnum.tool,
+        manualWorkflowOnly: true,
+        isEntry: false,
+        inputs: [],
+        outputs: []
+      } as RuntimeNodeItemType,
+      {
+        nodeId: 'agent-tool',
+        name: 'List Files',
+        flowNodeType: FlowNodeTypeEnum.tool,
+        isEntry: false,
+        inputs: [],
+        outputs: []
+      } as RuntimeNodeItemType
+    ];
+    const edges: RuntimeEdgeItemType[] = [
+      {
+        source: 'agent',
+        target: 'manual-image-import',
+        sourceHandle: 'selectedTools',
+        targetHandle: 'selectedTools',
+        status: 'active'
+      } as RuntimeEdgeItemType,
+      {
+        source: 'agent',
+        target: 'agent-tool',
+        sourceHandle: 'selectedTools',
+        targetHandle: 'selectedTools',
+        status: 'active'
+      } as RuntimeEdgeItemType
+    ];
+
+    expect(filterToolNodeIdByEdges({ nodes, nodeId: 'agent', edges })).toEqual(['agent-tool']);
   });
 });

@@ -93,6 +93,7 @@ export type FlowNodeCommonType = {
   systemKeyCost?: number;
   hasTokenFee?: boolean;
   hasSystemSecret?: boolean;
+  manualWorkflowOnly?: boolean;
 };
 
 export type PluginDataType = {
@@ -158,6 +159,7 @@ export type NodeTemplateListItemType = {
   courseUrl?: string; // 教程链接
   sourceMember?: SourceMember;
   toolSource?: 'uploaded' | 'built-in'; // Plugin source type
+  manualWorkflowOnly?: boolean;
 };
 
 export type NodeTemplateListType = {

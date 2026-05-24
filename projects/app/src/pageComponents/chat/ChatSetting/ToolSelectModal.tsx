@@ -63,7 +63,11 @@ const ToolSelectModal = ({ onClose, ...props }: Props & { onClose: () => void })
       parentId?: ParentIdType;
       searchVal?: string;
     }) => {
-      return getAppToolTemplates({ parentId, searchKey: searchVal });
+      return getAppToolTemplates({
+        parentId,
+        searchKey: searchVal,
+        includeManualWorkflowTools: false
+      });
     },
     {
       onSuccess(_, [{ parentId = '' }]) {

@@ -13,6 +13,7 @@ import type { FlowNodeOutputItemType } from '@fastgpt/global/core/workflow/type/
 import { PluginStatusEnum } from '@fastgpt/global/core/plugin/type';
 import {
   summarizeExecToolResponse,
+  summarizeImportImageUrlToolResponse,
   summarizeListFilesToolResponse,
   summarizeReadFileToolResponse,
   summarizeWriteFileToolResponse
@@ -24,6 +25,8 @@ const TOOLSET_ID = 'systemTool-hivechat-sandbox';
 const LIST_FILES_TOOL_ID = 'systemTool-hivechat-sandbox-list-files';
 const READ_FILE_TOOL_ID = 'systemTool-hivechat-sandbox-read-file';
 const WRITE_FILE_TOOL_ID = 'systemTool-hivechat-sandbox-write-file';
+const LEGACY_IMPORT_IMAGE_URL_TOOL_ID = 'systemTool-hivechat-sandbox-import-image-url';
+const IMPORT_IMAGE_URL_TOOL_ID = 'systemTool-hivechat-import-image-url';
 const EXEC_SHELL_TOOL_ID = 'systemTool-hivechat-sandbox-exec-shell';
 const EXEC_ARGS_TOOL_ID = 'systemTool-hivechat-sandbox-exec-args';
 const CONTINUE_COMMAND_TOOL_ID = 'systemTool-hivechat-sandbox-continue-command';
@@ -212,6 +215,93 @@ const writeFileOutputSchema: JSONSchemaOutputType = {
     degraded: {
       type: 'boolean',
       description: 'Whether the sandbox session is in degraded mode'
+    }
+  }
+};
+
+const importImageUrlInputSchema: JSONSchemaInputType = {
+  type: 'object',
+  properties: {
+    imageUrl: {
+      type: 'string',
+      description: 'Public http or https URL of the image to import into the current sandbox.'
+    },
+    directory: {
+      type: 'string',
+      description:
+        'Target directory relative to /workspace. Defaults to output/images. Do not use /workspace absolute paths.'
+    },
+    filename: {
+      type: 'string',
+      description:
+        'Optional target filename. The bridge normalizes the name and uses the actual image type extension.'
+    },
+    overwrite: {
+      type: 'boolean',
+      description: 'Whether an existing file may be overwritten. Defaults to false.'
+    },
+    renameOnConflict: {
+      type: 'boolean',
+      description:
+        'When overwrite is false and a file already exists, automatically choose a new filename. Defaults to true.'
+    }
+  },
+  required: ['imageUrl']
+};
+
+const importImageUrlOutputSchema: JSONSchemaOutputType = {
+  type: 'object',
+  properties: {
+    path: {
+      type: 'string',
+      description: 'Relative sandbox workspace path of the imported image.'
+    },
+    sandboxUri: {
+      type: 'string',
+      description: 'sandbox://workspace URI that can be used in HiveChat Markdown output.'
+    },
+    workspacePath: {
+      type: 'string',
+      description: 'Absolute path inside the sandbox container.'
+    },
+    directory: {
+      type: 'string',
+      description: 'Directory where the image was written.'
+    },
+    filename: {
+      type: 'string',
+      description: 'Final filename after normalization and conflict handling.'
+    },
+    contentType: {
+      type: 'string',
+      description: 'Detected image MIME type.'
+    },
+    sizeBytes: {
+      type: 'number',
+      description: 'Downloaded image size in bytes.'
+    },
+    sha256: {
+      type: 'string',
+      description: 'SHA-256 digest of the downloaded image bytes.'
+    },
+    renamed: {
+      type: 'boolean',
+      description: 'Whether the filename changed due to conflict handling.'
+    },
+    uploaded: {
+      type: 'array',
+      description: 'Uploaded file summary returned by the sandbox.',
+      items: {
+        type: 'object'
+      }
+    },
+    workspaceBytes: {
+      type: 'number',
+      description: 'Current workspace size in bytes.'
+    },
+    degraded: {
+      type: 'boolean',
+      description: 'Whether the sandbox session is in degraded mode.'
     }
   }
 };
@@ -642,7 +732,7 @@ const localSystemTools: AppToolTemplateItemType[] = [
       nodes: [],
       edges: []
     },
-    pluginOrder: 34,
+    pluginOrder: 35,
     ...toolsetMeta
   },
   {
@@ -663,7 +753,7 @@ const localSystemTools: AppToolTemplateItemType[] = [
       nodes: [],
       edges: []
     },
-    pluginOrder: 35,
+    pluginOrder: 36,
     ...toolsetMeta
   },
   {
@@ -684,7 +774,7 @@ const localSystemTools: AppToolTemplateItemType[] = [
       nodes: [],
       edges: []
     },
-    pluginOrder: 36,
+    pluginOrder: 37,
     ...toolsetMeta
   },
   {
@@ -705,13 +795,50 @@ const localSystemTools: AppToolTemplateItemType[] = [
       nodes: [],
       edges: []
     },
-    pluginOrder: 37,
+    pluginOrder: 38,
+    ...toolsetMeta
+  }
+];
+
+const manualWorkflowLocalSystemTools: AppToolTemplateItemType[] = [
+  {
+    id: IMPORT_IMAGE_URL_TOOL_ID,
+    parentId: null,
+    isFolder: false,
+    manualWorkflowOnly: true,
+    name: 'HiveChat Import Image URL',
+    intro: 'Download an external image URL into the current HiveChat sandbox session',
+    toolDescription:
+      'Workflow-only node for storing an image URL returned by an upstream image-generation step as a real file in the current HiveChat sandbox. Configure it explicitly in the workflow; it is not exposed as an agent-callable HiveChat Sandbox tool.',
+    userGuide:
+      'Configure this node after an image-generation step and map imageUrl from the upstream output. It downloads the image through the HiveChat bridge, validates the image type, writes it under output/images by default, and returns a sandbox://workspace URI plus the sandbox file path.',
+    versionList: [
+      buildVersion({
+        inputSchema: importImageUrlInputSchema,
+        outputSchema: importImageUrlOutputSchema
+      })
+    ],
+    workflow: {
+      nodes: [],
+      edges: []
+    },
+    pluginOrder: 31,
     ...toolsetMeta
   }
 ];
 
 const localSystemToolsById = new Map(
-  [...localSystemTools, ...hiddenLocalSystemTools].map((tool) => [tool.id, tool] as const)
+  [
+    ...localSystemTools,
+    ...manualWorkflowLocalSystemTools,
+    ...hiddenLocalSystemTools,
+    ...manualWorkflowLocalSystemTools.map((tool) => ({
+      ...tool,
+      id: LEGACY_IMPORT_IMAGE_URL_TOOL_ID,
+      parentId: TOOLSET_ID,
+      manualWorkflowOnly: true
+    }))
+  ].map((tool) => [tool.id, tool] as const)
 );
 const localSystemToolIdSet = new Set(localSystemToolsById.keys());
 
@@ -829,6 +956,9 @@ const normalizeSandboxDisplayPath = (value: any) => {
   });
   return normalized === undefined ? '' : normalized;
 };
+
+const buildSandboxUri = (path: string) =>
+  `sandbox://workspace/${path.split('/').map(encodeURIComponent).join('/')}`;
 
 const getOptionalNumber = (value: any) => {
   if (value === undefined || value === null || value === '') return undefined;
@@ -1055,7 +1185,10 @@ const resolveContextToken = ({
   );
 };
 
-export const getLocalSystemTools = (): AppToolTemplateItemType[] => localSystemTools;
+export const getLocalSystemTools = (): AppToolTemplateItemType[] => [
+  ...localSystemTools,
+  ...manualWorkflowLocalSystemTools
+];
 export const getLocalSystemToolById = (toolId: string) => localSystemToolsById.get(toolId);
 
 export const getLocalSystemToolTags = () => [
@@ -1072,6 +1205,8 @@ export const getLocalSystemToolIds = () => ({
   listFilesToolId: LIST_FILES_TOOL_ID,
   readFileToolId: READ_FILE_TOOL_ID,
   writeFileToolId: WRITE_FILE_TOOL_ID,
+  importImageUrlToolId: IMPORT_IMAGE_URL_TOOL_ID,
+  legacyImportImageUrlToolId: LEGACY_IMPORT_IMAGE_URL_TOOL_ID,
   execShellToolId: EXEC_SHELL_TOOL_ID,
   execArgsToolId: EXEC_ARGS_TOOL_ID,
   continueCommandToolId: CONTINUE_COMMAND_TOOL_ID,
@@ -1257,6 +1392,71 @@ export const runLocalSystemTool = async ({
     const toolResponse = summarizeWriteFileToolResponse({
       path: output.path,
       uploaded: output.uploaded,
+      workspaceBytes: output.workspaceBytes,
+      degraded: output.degraded
+    });
+
+    return {
+      output,
+      toolResponse,
+      toolResponseForUI: buildWriteFileToolResponseForUI({
+        summary: toolResponse,
+        output
+      })
+    };
+  }
+
+  if (toolId === IMPORT_IMAGE_URL_TOOL_ID || toolId === LEGACY_IMPORT_IMAGE_URL_TOOL_ID) {
+    const imageUrl = getOptionalString(inputs.imageUrl);
+    if (!imageUrl) {
+      throw new Error('imageUrl is required');
+    }
+
+    const directory =
+      inputs.directory === undefined || inputs.directory === null || inputs.directory === ''
+        ? undefined
+        : normalizeSandboxRelativePathInput(inputs.directory);
+    const filename = getOptionalString(inputs.filename);
+    const overwrite = getOptionalBoolean(inputs.overwrite);
+    const renameOnConflict = getOptionalBoolean(inputs.renameOnConflict);
+
+    const response = await bridgeRequest('/v1/files/import-image-url', {
+      contextToken,
+      imageUrl,
+      ...(directory !== undefined ? { directory } : {}),
+      ...(filename !== undefined ? { filename } : {}),
+      ...(overwrite !== undefined ? { overwrite } : {}),
+      ...(renameOnConflict !== undefined ? { renameOnConflict } : {})
+    });
+
+    const path = normalizeSandboxDisplayPath(
+      getFirstDefined(response.path, response.relative_path, '')
+    );
+    const output = {
+      path,
+      sandboxUri: String(
+        getFirstDefined(response.sandboxUri, response.sandbox_uri, buildSandboxUri(path))
+      ),
+      workspacePath: String(
+        getFirstDefined(response.workspacePath, response.workspace_path, `/workspace/${path}`)
+      ),
+      directory: normalizeSandboxDisplayPath(getFirstDefined(response.directory, directory, '')),
+      filename: String(getFirstDefined(response.filename, path.split('/').pop() || '')),
+      contentType: String(getFirstDefined(response.contentType, response.content_type, '')),
+      sizeBytes: Number(getFirstDefined(response.sizeBytes, response.size_bytes, 0)),
+      sha256: String(getFirstDefined(response.sha256, '')),
+      renamed: Boolean(response.renamed),
+      uploaded: Array.isArray(response.uploaded) ? response.uploaded : [],
+      workspaceBytes: Number(getFirstDefined(response.workspaceBytes, response.workspace_bytes, 0)),
+      degraded: Boolean(response.degraded),
+      [NodeOutputKeyEnum.rawResponse]: response
+    };
+    const toolResponse = summarizeImportImageUrlToolResponse({
+      path: output.path,
+      sandboxUri: output.sandboxUri,
+      contentType: output.contentType,
+      sizeBytes: output.sizeBytes,
+      renamed: output.renamed,
       workspaceBytes: output.workspaceBytes,
       degraded: output.degraded
     });

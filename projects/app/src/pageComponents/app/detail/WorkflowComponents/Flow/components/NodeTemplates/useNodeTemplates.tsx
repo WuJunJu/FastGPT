@@ -13,7 +13,11 @@ import { AppContext } from '@/pageComponents/app/detail/context';
 import { getPluginToolTags } from '@/web/core/plugin/toolTag/api';
 import { AppTypeEnum } from '@fastgpt/global/core/app/constants';
 
-export const useNodeTemplates = () => {
+export const useNodeTemplates = ({
+  includeManualWorkflowTools = true
+}: {
+  includeManualWorkflowTools?: boolean;
+} = {}) => {
   const { feConfigs } = useSystemStore();
   const [templateType, setTemplateType] = useState(TemplateTypeEnum.basic);
 
@@ -119,7 +123,8 @@ export const useNodeTemplates = () => {
         return getAppToolTemplates({
           searchKey: searchVal,
           parentId,
-          tags
+          tags,
+          includeManualWorkflowTools
         });
       }
     },
@@ -138,7 +143,7 @@ export const useNodeTemplates = () => {
 
       loadNodeTemplates({ parentId, searchVal: searchKey, tags: selectedTagIds });
     },
-    [searchKey],
+    [searchKey, includeManualWorkflowTools],
     {
       wait: 300
     }

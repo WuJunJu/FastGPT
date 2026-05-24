@@ -133,6 +133,35 @@ export const summarizeWriteFileToolResponse = ({
   ].join(' ');
 };
 
+export const summarizeImportImageUrlToolResponse = ({
+  path,
+  sandboxUri,
+  contentType,
+  sizeBytes,
+  renamed,
+  workspaceBytes,
+  degraded
+}: {
+  path: string;
+  sandboxUri?: string;
+  contentType?: string;
+  sizeBytes?: number;
+  renamed?: boolean;
+  workspaceBytes?: number;
+  degraded?: boolean;
+}) =>
+  [
+    `Imported image to ${path}`,
+    ...(sandboxUri ? [`sandboxUri: ${sandboxUri}`] : []),
+    ...(contentType ? [contentType] : []),
+    ...(Number.isFinite(Number(sizeBytes)) ? [formatByteCount(sizeBytes)] : []),
+    ...(renamed ? ['renamed'] : []),
+    ...(Number.isFinite(Number(workspaceBytes))
+      ? [`workspace ${formatByteCount(workspaceBytes)}`]
+      : []),
+    ...(degraded ? ['sandbox degraded'] : [])
+  ].join(' ');
+
 export const summarizeExecToolResponse = ({
   running,
   completed,

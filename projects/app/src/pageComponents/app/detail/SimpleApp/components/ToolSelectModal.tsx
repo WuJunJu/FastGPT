@@ -85,7 +85,11 @@ const ToolSelectModal = ({ onClose, ...props }: Props & { onClose: () => void })
       searchVal?: string;
     }) => {
       if (type === TemplateTypeEnum.systemTools) {
-        return getAppToolTemplates({ parentId, searchKey: searchVal });
+        return getAppToolTemplates({
+          parentId,
+          searchKey: searchVal,
+          includeManualWorkflowTools: false
+        });
       } else if (type === TemplateTypeEnum.myTools) {
         return getTeamAppTemplates({
           parentId,

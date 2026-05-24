@@ -15,6 +15,7 @@ export type GetSystemPluginTemplatesBody = {
   searchKey?: string;
   parentId?: ParentIdType;
   tags?: string[];
+  includeManualWorkflowTools?: boolean;
 };
 
 async function handler(
@@ -22,7 +23,7 @@ async function handler(
   _res: NextApiResponse<any>
 ): Promise<NodeTemplateListItemType[]> {
   const { teamId, isRoot } = await authCert({ req, authToken: true });
-  const { searchKey, parentId, tags } = req.body;
+  const { searchKey, parentId, tags, includeManualWorkflowTools = false } = req.body;
   const formatParentId = parentId || null;
   const lang = getLocale(req);
 
@@ -37,11 +38,13 @@ async function handler(
       if (!tags || tags.length === 0) return true;
       return tool.tags?.some((tag) => tags.includes(tag));
     })
+    .filter((tool) => includeManualWorkflowTools || !tool.manualWorkflowOnly)
     .map<NodeTemplateListItemType>((tool) => ({
       ...tool,
       parentId: tool.parentId === undefined ? null : tool.parentId,
       templateType: tool.templateType ?? FlowNodeTemplateTypeEnum.other,
       flowNodeType: tool.isFolder ? FlowNodeTypeEnum.toolSet : FlowNodeTypeEnum.tool,
+      isTool: tool.manualWorkflowOnly ? false : true,
       name: parseI18nString(tool.name, lang),
       intro: parseI18nString(tool.intro ?? '', lang),
       instructions: parseI18nString(tool.userGuide ?? '', lang),

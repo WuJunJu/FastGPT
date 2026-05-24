@@ -55,6 +55,7 @@ export type AppToolTemplateItemType = WorkflowTemplateType & {
   tags?: string[] | null;
   defaultInstalled?: boolean;
   isOfficial?: boolean;
+  manualWorkflowOnly?: boolean;
 
   // Admin config
   inputList?: FlowNodeInputItemType['inputList'];

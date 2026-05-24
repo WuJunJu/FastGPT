@@ -79,17 +79,22 @@ export const getWorkflowResponseWrite = ({
 };
 
 export const filterToolNodeIdByEdges = ({
+  nodes = [],
   nodeId,
   edges
 }: {
+  nodes?: RuntimeNodeItemType[];
   nodeId: string;
   edges: RuntimeEdgeItemType[];
 }) => {
+  const nodeMap = new Map(nodes.map((node) => [node.nodeId, node]));
+
   return edges
     .filter(
       (edge) => edge.source === nodeId && edge.targetHandle === NodeOutputKeyEnum.selectedTools
     )
-    .map((edge) => edge.target);
+    .map((edge) => edge.target)
+    .filter((target) => !nodeMap.get(target)?.manualWorkflowOnly);
 };
 
 export const getHistories = (history?: ChatItemType[] | number, histories: ChatItemType[] = []) => {

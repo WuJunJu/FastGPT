@@ -4,6 +4,7 @@ import { type AIChatItemValueItemType } from '@fastgpt/global/core/chat/type';
 import { type FlowNodeInputItemType } from '@fastgpt/global/core/workflow/type/io';
 import { type RuntimeEdgeItemType } from '@fastgpt/global/core/workflow/type/edge';
 import { type RuntimeNodeItemType } from '@fastgpt/global/core/workflow/runtime/type';
+import { isVisibleToolParamInput } from './schema';
 
 export const updateToolInputValue = ({
   params,
@@ -14,7 +15,11 @@ export const updateToolInputValue = ({
 }) => {
   return inputs.map((input) => ({
     ...input,
-    value: Object.prototype.hasOwnProperty.call(params, input.key) ? params[input.key] : input.value
+    value: Object.prototype.hasOwnProperty.call(params, input.key)
+      ? params[input.key]
+      : isVisibleToolParamInput(input)
+        ? undefined
+        : input.value
   }));
 };
 

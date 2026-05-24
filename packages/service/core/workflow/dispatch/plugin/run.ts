@@ -17,7 +17,7 @@ import { type DispatchNodeResultType } from '@fastgpt/global/core/workflow/runti
 import { authPluginByTmbId } from '../../../../support/permission/app/auth';
 import { ReadPermissionVal } from '@fastgpt/global/support/permission/constant';
 import { computedAppToolUsage } from '../../../app/tool/runtime/utils';
-import { filterSystemVariables, getNodeErrResponse } from '../utils';
+import { filterSystemVariables, getNodeErrResponse, getTransientWorkflowVariables } from '../utils';
 import { serverGetWorkflowToolRunUserQuery } from '../../../app/tool/workflowTool/utils';
 import type { NodeInputKeyEnum, NodeOutputKeyEnum } from '@fastgpt/global/core/workflow/constants';
 import { getChildAppRuntimeById } from '../../../app/tool/controller';
@@ -39,6 +39,21 @@ type RunPluginResponse = DispatchNodeResultType<
     [NodeOutputKeyEnum.errorText]?: string;
   }
 >;
+
+export const getPluginRuntimeVariables = ({
+  parentVariables,
+  externalWorkflowVariables,
+  pluginId
+}: {
+  parentVariables: Record<string, any>;
+  externalWorkflowVariables?: Record<string, any>;
+  pluginId: string;
+}) => ({
+  ...(externalWorkflowVariables || {}),
+  ...getTransientWorkflowVariables(parentVariables),
+  ...filterSystemVariables(parentVariables),
+  appId: pluginId
+});
 
 export const dispatchRunPlugin = async (props: RunPluginProps): Promise<RunPluginResponse> => {
   const {
@@ -121,11 +136,11 @@ export const dispatchRunPlugin = async (props: RunPluginProps): Promise<RunPlugi
     });
 
     const { externalProvider } = await getUserChatInfo(runningAppInfo.tmbId);
-    const runtimeVariables = {
-      ...filterSystemVariables(props.variables),
-      appId: String(plugin.id),
-      ...(externalProvider ? externalProvider.externalWorkflowVariables : {})
-    };
+    const runtimeVariables = getPluginRuntimeVariables({
+      parentVariables: props.variables,
+      externalWorkflowVariables: externalProvider?.externalWorkflowVariables,
+      pluginId: String(plugin.id)
+    });
     const { flowResponses, flowUsages, assistantResponses, runTimes, system_memories } =
       await runWorkflow({
         ...props,

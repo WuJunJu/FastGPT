@@ -290,7 +290,7 @@ const WorkflowInitContextProvider = ({
 
     return nodeList.reduce(
       (acc, node) => {
-        if (selectedToolEdgeMap[node.nodeId]) {
+        if (selectedToolEdgeMap[node.nodeId] && !node.manualWorkflowOnly) {
           acc[node.nodeId] = true;
         }
         return acc;

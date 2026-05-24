@@ -112,6 +112,7 @@ export type RuntimeNodeItemType = {
   toolDescription?: StoreNodeItemType['toolDescription'];
   flowNodeType: StoreNodeItemType['flowNodeType'];
   showStatus?: StoreNodeItemType['showStatus'];
+  manualWorkflowOnly?: StoreNodeItemType['manualWorkflowOnly'];
   isEntry?: boolean;
   version?: string;
 

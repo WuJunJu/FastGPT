@@ -67,12 +67,19 @@ type ChildAppType = AppToolTemplateItemType & {
   isLatestVersion?: boolean; // Auto computed
 };
 
-const { execShellToolId: hivechatExecShellToolId, legacyExecToolId: hivechatLegacyExecToolId } =
-  getLocalSystemToolIds();
+const {
+  execShellToolId: hivechatExecShellToolId,
+  legacyExecToolId: hivechatLegacyExecToolId,
+  importImageUrlToolId: hivechatImportImageUrlToolId,
+  legacyImportImageUrlToolId: hivechatLegacyImportImageUrlToolId
+} = getLocalSystemToolIds();
 
 const getCompatSystemToolId = (pluginId: string) => {
   if (pluginId === hivechatLegacyExecToolId) {
     return hivechatExecShellToolId;
+  }
+  if (pluginId === hivechatLegacyImportImageUrlToolId) {
+    return hivechatImportImageUrlToolId;
   }
   return pluginId;
 };
@@ -508,7 +515,7 @@ export async function getChildAppPreviewNode({
     courseUrl: app.courseUrl,
     userGuide: app.userGuide,
     showStatus: true,
-    isTool: true,
+    isTool: app.manualWorkflowOnly ? false : true,
     catchError: false,
 
     version: app.version,
@@ -521,6 +528,7 @@ export async function getChildAppPreviewNode({
     systemKeyCost: app.systemKeyCost,
     hasTokenFee: app.hasTokenFee,
     hasSystemSecret: app.hasSystemSecret,
+    manualWorkflowOnly: app.manualWorkflowOnly,
     isFolder: app.isFolder,
     status: app.status,
 

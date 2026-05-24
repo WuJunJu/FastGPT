@@ -31,7 +31,9 @@ const NodeTemplatesPopover = () => {
     toolTags,
     selectedTagIds,
     setSelectedTagIds
-  } = useNodeTemplates();
+  } = useNodeTemplates({
+    includeManualWorkflowTools: handleParams?.handleId !== 'selectedTools'
+  });
 
   const onAddNode = useMemoizedFn(async ({ newNodes }: { newNodes: Node<FlowNodeItemType>[] }) => {
     setNodes((state) => {
@@ -64,7 +66,7 @@ const NodeTemplatesPopover = () => {
         }
 
         // 3. Tool handle can only connect to tool nodes
-        if (isToolHandle && !node.data.isTool) {
+        if (isToolHandle && (!node.data.isTool || node.data.manualWorkflowOnly)) {
           return false;
         }
 

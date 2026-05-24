@@ -85,6 +85,66 @@ describe('runLocalSystemTool', () => {
     });
   });
 
+  it('imports external image URLs into the sandbox through the bridge', async () => {
+    const { importImageUrlToolId } = getLocalSystemToolIds();
+
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        path: 'output/images/result.png',
+        sandboxUri: 'sandbox://workspace/output/images/result.png',
+        workspacePath: '/workspace/output/images/result.png',
+        directory: 'output/images',
+        filename: 'result.png',
+        contentType: 'image/png',
+        sizeBytes: 1024,
+        sha256: 'abc123',
+        renamed: false,
+        uploaded: ['output/images/result.png'],
+        workspaceBytes: 2048,
+        degraded: false
+      })
+    });
+
+    const result = await runLocalSystemTool({
+      toolId: importImageUrlToolId,
+      inputs: {
+        imageUrl: 'https://example.com/result.png',
+        directory: 'output/images',
+        filename: 'result.png',
+        overwrite: false,
+        renameOnConflict: true
+      },
+      variables: {
+        SandboxContextToken: contextToken
+      }
+    });
+
+    const request = fetchMock.mock.calls[0];
+    expect(request?.[0]).toBe('http://127.0.0.1:3081/v1/files/import-image-url');
+    const body = JSON.parse(String(request?.[1]?.body));
+    expect(body).toMatchObject({
+      contextToken,
+      imageUrl: 'https://example.com/result.png',
+      directory: 'output/images',
+      filename: 'result.png',
+      overwrite: false,
+      renameOnConflict: true
+    });
+    expect(result.output).toMatchObject({
+      path: 'output/images/result.png',
+      sandboxUri: 'sandbox://workspace/output/images/result.png',
+      workspacePath: '/workspace/output/images/result.png',
+      contentType: 'image/png',
+      sizeBytes: 1024
+    });
+    expect(String(result.toolResponse)).toContain('Imported image to output/images/result.png');
+    expect(result.toolResponseForUI).toMatchObject({
+      kind: 'sandbox_write_file',
+      path: 'output/images/result.png'
+    });
+  });
+
   it('runs Exec Shell with command only', async () => {
     const { execShellToolId } = getLocalSystemToolIds();
 
@@ -347,5 +407,23 @@ describe('runLocalSystemTool', () => {
     const body = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body));
     expect(body.command).toBe('echo legacy-ok');
     expect(body.argv).toBeUndefined();
+  });
+
+  it('exposes image import as a standalone manual workflow system tool, not a sandbox toolset child', async () => {
+    const { toolsetId, importImageUrlToolId } = getLocalSystemToolIds();
+    const tools = getLocalSystemTools();
+
+    const importTool = tools.find((tool) => tool.id === importImageUrlToolId);
+    expect(importTool).toMatchObject({
+      parentId: null,
+      manualWorkflowOnly: true,
+      name: 'HiveChat Import Image URL'
+    });
+
+    const sandboxChildren = tools.filter((tool) => tool.parentId === toolsetId);
+    expect(sandboxChildren.some((tool) => tool.id === importImageUrlToolId)).toBe(false);
+    expect(
+      sandboxChildren.some((tool) => tool.name === 'Import Image URL' || tool.manualWorkflowOnly)
+    ).toBe(false);
   });
 });

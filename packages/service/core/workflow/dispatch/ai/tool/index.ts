@@ -75,7 +75,11 @@ export const dispatchRunTools = async (props: DispatchToolModuleProps): Promise<
       fileLinks = undefined;
     }
 
-    const toolNodeIds = filterToolNodeIdByEdges({ nodeId, edges: runtimeEdges });
+    const toolNodeIds = filterToolNodeIdByEdges({
+      nodes: runtimeNodes,
+      nodeId,
+      edges: runtimeEdges
+    });
 
     // Gets the module to which the tool is connected
     const toolNodes = toolNodeIds

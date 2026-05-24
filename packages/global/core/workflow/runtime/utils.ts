@@ -260,6 +260,7 @@ export const storeNodes2RuntimeNodes = (
         toolDescription: node.toolDescription,
         flowNodeType: node.flowNodeType,
         showStatus: node.showStatus,
+        manualWorkflowOnly: node.manualWorkflowOnly,
         isEntry: entryNodeIds.includes(node.nodeId),
         inputs,
         originalInputs: cloneDeep(inputs),
